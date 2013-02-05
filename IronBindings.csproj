@@ -11,8 +11,6 @@
     <AssemblyName>IronBindings</AssemblyName>
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
-    <TargetFrameworkProfile>
-    </TargetFrameworkProfile>
     <SolutionDir Condition="$(SolutionDir) == '' Or $(SolutionDir) == '*Undefined*'">..\..\apRuntime\muFAT\</SolutionDir>
     <RestorePackages>true</RestorePackages>
   </PropertyGroup>
@@ -46,17 +44,17 @@
   <ItemGroup>
     <Reference Include="IronPython, Version=2.7.0.40, Culture=neutral, PublicKeyToken=7f709c5b713576e1, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\..\..\..\..\..\..\Program Files (x86)\IronPython 2.7\Platforms\Net40\IronPython.dll</HintPath>
+      <HintPath>..\..\..\..\_ThirdParty\Nuget\IronPython.2.7.3\lib\Net40\IronPython.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="Microsoft.Dynamic, Version=1.1.0.20, Culture=neutral, PublicKeyToken=7f709c5b713576e1, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\..\..\..\..\..\..\Program Files (x86)\IronPython 2.7\Platforms\Net40\Microsoft.Dynamic.dll</HintPath>
+      <HintPath>..\..\..\..\_ThirdParty\Nuget\IronPython.2.7.3\lib\Net40\Microsoft.Dynamic.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="Microsoft.Scripting, Version=1.1.0.20, Culture=neutral, PublicKeyToken=7f709c5b713576e1, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\..\..\..\..\..\..\Program Files (x86)\IronPython 2.7\Platforms\Net40\Microsoft.Scripting.dll</HintPath>
+      <HintPath>..\..\..\..\_ThirdParty\Nuget\IronPython.2.7.3\lib\Net40\Microsoft.Scripting.dll</HintPath>
       <EmbedInteropTypes>False</EmbedInteropTypes>
       <Private>True</Private>
     </Reference>
