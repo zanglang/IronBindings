@@ -47,6 +47,11 @@
       <HintPath>..\..\..\..\_ThirdParty\Nuget\IronPython.2.7.3\lib\Net40\IronPython.dll</HintPath>
       <Private>True</Private>
     </Reference>
+    <Reference Include="IronPython.Modules, Version=2.7.0.40, Culture=neutral, PublicKeyToken=7f709c5b713576e1, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\..\..\_ThirdParty\Nuget\IronPython.2.7.3\lib\Net40\IronPython.Modules.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="Microsoft.Dynamic, Version=1.1.0.20, Culture=neutral, PublicKeyToken=7f709c5b713576e1, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\..\..\_ThirdParty\Nuget\IronPython.2.7.3\lib\Net40\Microsoft.Dynamic.dll</HintPath>
@@ -98,7 +103,7 @@
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Import Project="$(SolutionDir)\.nuget\nuget.targets" />
   <PropertyGroup>
-    <PostBuildEvent>xcopy "$(ProjectDir)muvee" "$(TargetDir)" /S /Y /Q
+    <PostBuildEvent>xcopy "$(ProjectDir)muvee" "$(TargetDir)muvee\" /S /Y /Q
 xcopy "$(ProjectDir)packages.zip" "$(TargetDir)" /S /Y /Q</PostBuildEvent>
   </PropertyGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
