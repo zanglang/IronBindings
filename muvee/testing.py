@@ -1,10 +1,50 @@
-import os, re, unittest
+import os, re, sys, unittest
 from datetime import datetime
 from functools import wraps
 from inspect import getmodule
 from pkgutil import iter_modules
 from tempfile import mkstemp
 from types import FunctionType
+
+
+class MufatLogger(object):
+	"""
+	File-like object class that writes all text input to the muveedebug log folder.
+	If c:\muveedebug\Log.txt exists, will also intercept all writes to standard
+	output as well.
+	"""
+
+	def __init__(self):
+		# check if logfiles exist
+		exists = lambda a, b: os.path.isfile(a) and a or b
+		self.file = reduce(exists, [r'c:\muveedebug\Log.txt', 'c:\muveedebug\LoggingError.txt'])
+		if not os.path.exists(os.path.dirname(self.file)):
+			os.makedirs(os.path.dirname(self.file))
+		self.stdout = sys.stdout
+		if os.path.isfile(self.file):
+			sys.stdout = self
+
+	def __del__(self):
+		# revert standard out back to normal
+		sys.stdout = self.stdout
+
+	def write(self, *args):
+		# append to logfile and print to stdout
+		try:
+			with open(self.file, 'a') as f:
+				f.write(*args)
+		except:
+			self.stdout.write("MufatLogger: Skipped write.")
+		self.stdout.write(*args)
+
+	def writeln(self, *args):
+		self.write(*args)
+		self.write('\n')
+
+	# do nothing
+	def _noop(self):
+		pass
+	close = flush = _noop
 
 
 def testcase(f):
@@ -106,6 +146,7 @@ class MufatTestRunner(unittest.TextTestRunner):
 		self.stream.writeln("**** Starting: %s ****" % runname)
 		result = super(MufatTestRunner, self).run(suite)
 		passed = map(lambda t: t.id(), result.passed)
+		result.skipped = list(set(suite._tests).difference(result.passed))
 
 		# generate summary log file
 		with open(result.logfile, "w+") as f:
@@ -155,6 +196,7 @@ def generate_wrapper(func, testsuite):
 			# print ">>>>> Delegating function call to", func.__name__
 			func(*args, **kwargs)
 		case = unittest.FunctionTestCase(_wrap)
+		# detect missing media or binfiles that needs copying
 		if args:
 			detect_media(*args)
 		if kwargs:
@@ -191,4 +233,4 @@ def run(func, localdict):
 	func.__call__()
 
 	# test cases collected, clear to run!
-	return MufatTestRunner().run(suite, func.__name__)
+	return MufatTestRunner(stream=MufatLogger()).run(suite, func.__name__)

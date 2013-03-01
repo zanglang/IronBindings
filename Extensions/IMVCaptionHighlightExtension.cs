@@ -67,10 +67,20 @@ namespace MVRuntimeLib.Extensions
             }
 
             Debug.Assert(self.CaptionHighlightCount == highlights.Count);
+            Func<double, double, bool> equals = (x, y) =>
+                {
+                    // compensate for floating point differences
+                    var difference = Math.Abs(x * 0.00001);
+                    return Math.Abs(x - y) <= difference;
+                };
+
             for (int i = 0; i < highlights.Count; i++)
             {
-                var tuple = self.Get(i);
-                Debug.Assert(tuple.Equals(highlights[i]));
+                var tuple1 = self.Get(i);
+                var tuple2 = highlights[i];
+                Debug.Assert(
+                    tuple1.Item1 == tuple2.Item1 && equals(tuple1.Item2, tuple2.Item2)
+                    && equals(tuple1.Item3, tuple2.Item3));
             }
         }
     }
