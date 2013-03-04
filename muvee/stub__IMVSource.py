@@ -12,7 +12,7 @@ def AddCaption(self, text):
 		'VerifyUserDscrp failed: ' + GetLastErrorDescription()
 
 @stub('IMVSource')
-def AnalyseTillDone(self, resolution=500, timeout=200):
+def AnalyseTillDone(self, resolution=1000, timeout=600):
 	from . import GetLastErrorDescription
 	prog = -1
 	count = timeout

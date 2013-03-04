@@ -1,7 +1,7 @@
 import os, threading, time
 from functools import wraps
 from . import gen_stub, InitFlags, LoadFlags, MakeFlags, SourceType, TimelineType, \
-	IMVCaptionHighlight, IMVExclude, IMVHighlight, IMVSource, \
+	IMVCaptionHighlight, IMVExclude, IMVHighlight, IMVOperatorInfo, IMVSource, \
 	IMVStyleCollection, IMVTargetRect, IMVTitleCredits
 
 
@@ -53,6 +53,10 @@ def CreateSource(path, srctype):
 			'LoadFile failed: ' + GetLastErrorDescription()
 		assert src.AnalyseTillDone(), \
 			'AnalyseTillDone failed: ' + GetLastErrorDescription()
+	elif srctype == SourceType.OPERATOR:
+		assert os.path.exists(path), "File %s does not exist" % path
+		assert src.LoadFile(path, LoadFlags.NULL), \
+			'LoadFile failed: ' + GetLastErrorDescription()
 	else:
 		# not a file source type
 		src.Load(path, LoadFlags.CONTEXT)
@@ -137,6 +141,20 @@ def AddSourceVideoWithExclusion(path, *args):
 	AddSource(src, SourceType.VIDEO, LoadFlags.VERIFYSUPPORT)
 
 @is_a_stub
+def AddSourceAnchorOperator(scmfile, anchor_value):
+	from .mvrt import Core
+	assert Core.MusicSources.Count > 0, "No music sources loaded!"
+	music = Core.MusicSources[0]
+
+	src = CreateSource(scmfile, SourceType.OPERATOR)
+	# setup anchor parameters
+	op = gen_stub(IMVOperatorInfo)(src)
+	op.SetParam("ANCHOR_MEDIA", music.UniqueID)
+	op.SetParam("ANCHOR_TIME", anchor_value)
+
+	AddSource(src, SourceType.OPERATOR, LoadFlags.NULL)
+
+@is_a_stub
 def ConfigRenderTL2File(path):
 	from .mvrt import Core
 	# check if file exists
@@ -174,7 +192,7 @@ def PutTitleString(title):
 	titles.TitleString = title
 
 @is_a_stub
-def AnalyseTillDone(resolution=500, timeout=200):
+def AnalyseTillDone(resolution=1000, timeout=600):
 	from .mvrt import Core
 
 	assert Core.StartAnalysisProc(0), \
@@ -305,7 +323,7 @@ def PreviewTillDone(timeline=TimelineType.MUVEE, width=320, height=240):
 	return PreviewUntil(timeline, width, height, until=1)
 
 @is_a_stub
-def SaveTillDone(filename, resolution=1000, timeout=360):
+def SaveTillDone(filename, resolution=1000, timeout=600):
 	"""
 	Saves the video to a filename
 	
@@ -336,7 +354,7 @@ def SaveTillDone(filename, resolution=1000, timeout=360):
 		raise
 
 @is_a_stub
-def SaveTillDoneWithPreview(filename, resolution=1000, timeout=360, width=640, height=480):
+def SaveTillDoneWithPreview(filename, resolution=1000, timeout=600, width=320, height=240):
 	"""
 	Saves the video to a filename
 	
