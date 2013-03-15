@@ -1,7 +1,7 @@
 import os, re, shutil, sys, unittest
 from datetime import datetime
 from functools import wraps
-from inspect import getmodule
+from inspect import currentframe, getmodule
 from pkgutil import iter_modules
 from tempfile import mkstemp
 from types import FunctionType
@@ -98,8 +98,6 @@ class MufatTestResult(unittest.TextTestResult):
 	def __init__(self, *args, **kwargs):
 		super(MufatTestResult, self).__init__(*args, **kwargs)
 		self.passed = []
-		# logfile for storing run output text
-		self.logfile_fd, self.logfile = mkstemp()
 
 	def addSuccess(self, test):
 		self.passed.append(test)
@@ -127,43 +125,23 @@ class MufatTestRunner(unittest.TextTestRunner):
 		super(MufatTestRunner, self).__init__(*args, failfast=True, verbosity=2,
 			resultclass=MufatTestResult, **kwargs)
 
-	def run(self, suite=None, runname="Mufat"):
-		startTime = datetime.now()
+	def run(self, suite=None, module_name="Mufat"):
 		if not suite:
 			suite = unittest.TestSuite()
-			module = __import__(runname, fromlist="dummy")
+			module = __import__(module_name, fromlist="dummy")
 			for test in make_tests(module):
 				suite.addTest(test)
 
-		if not "Init" in (t.id() for t in suite._tests[:1]):
-			from . import Init
-			suite._tests.insert(0, unittest.FunctionTestCase(Init))
-		if not "Release" in (t.id() for t in suite._tests[-1:]):
-			from . import Release
-			suite._tests.append(unittest.FunctionTestCase(Release))
+		if type(suite) is unittest.TestSuite:
+			if not "Init" in (t.id() for t in suite._tests[:1]):
+				from . import Init
+				suite._tests.insert(0, unittest.FunctionTestCase(Init))
+			if not "Release" in (t.id() for t in suite._tests[-1:]):
+				from . import Release
+				suite._tests.append(unittest.FunctionTestCase(Release))
 
 		# execute tests
-		self.stream.writeln("**** Starting: %s ****" % runname)
-		result = super(MufatTestRunner, self).run(suite)
-		passed = map(lambda t: t.id(), result.passed)
-		result.skipped = list(set(suite._tests).difference(result.passed))
-
-		# generate summary log file
-		with open(result.logfile, "w+") as f:
-			print >> f, "time:", startTime.strftime("%m-%d-%Y, %H:%M:%S")
-			print >> f, "passes:", len(result.passed)
-			print >> f, "failures:", len(result.failures) + len(result.errors)
-			print >> f, "untested:", len(result.skipped), "\n"
-
-			# log stubs that were not run/failed
-			for test in suite:
-				print >> f, test.id()
-				print >> f, getmodule(test._testFunc).__file__
-				print >> f, (test.id() in passed) and "1" or "0"
-				print >> f, getattr(test, "timeTaken", 0), "\n"
-
-		os.close(result.logfile_fd)
-		return result
+		return super(MufatTestRunner, self).run(suite)
 
 
 def detect_media(*media):
@@ -183,29 +161,7 @@ def detect_media(*media):
 			shutil.copy(src, dest)
 
 
-def generate_wrapper(func, testsuite):
-	"""
-	Wraps a function call with `unittest.FunctionTestCase` and adds it to a
-	`unittest.TestSuite`.
-	"""
-
-	@wraps(func)
-	def wrapper(*args, **kwargs):
-		@wraps(func)
-		def _wrap():
-			# print ">>>>> Delegating function call to", func.__name__
-			func(*args, **kwargs)
-		case = unittest.FunctionTestCase(_wrap)
-		# detect missing media or binfiles that needs copying
-		if args:
-			detect_media(*args)
-		if kwargs:
-			detect_media(kwargs.values())
-		testsuite.addTest(case)
-	return wrapper
-
-
-def run(func, localdict):
+def run(testfunc):
 	"""
 	Generates a `unittest.TestSuite` out of a given function `func` by creating
 	`unittest.FunctionTestCase` tests out of all imported test stubs and passing
@@ -215,22 +171,78 @@ def run(func, localdict):
 	functions with dummy wrappers that generate `unittest.FunctionTestCase`
 	cases to the actual stubs. Hence, it should only be used in __main__.
 
-	:param func: The test function to be called
-	:param localdict: `locals()`
+	:param testfunc: The test function to be called
 	"""
 
+	# get caller frame's locals
+	frame = currentframe()
+	localdict = frame.f_back.f_locals
+
+	# setup unittest
+	runner = MufatTestRunner(stream=MufatLogger())
 	suite = unittest.TestSuite()
+	results = []
+
+	def generate_test(func):
+		"""
+		Wraps a function call with `unittest.FunctionTestCase` and adds it to a
+		`unittest.TestSuite`.
+		"""
+
+		@wraps(func)
+		def wrapper(*args, **kwargs):
+			@wraps(func)
+			def _wrap():
+				print ">>>>> Delegating function call to", func.__name__
+				func(*args, **kwargs)
+			case = unittest.FunctionTestCase(_wrap)
+			# detect missing media or binfiles that needs copying
+			if args:
+				detect_media(*args)
+			if kwargs:
+				detect_media(kwargs.values())
+			suite.addTest(case)
+			results.append(runner.run(case))
+		return wrapper
+
 	for k, f in localdict.items():
 		# stubs are identified by having applied @stubs.is_a_stub decorators
 		if type(f) != FunctionType or not getattr(f, "is_a_stub", False):
 			continue
-		wrapped = generate_wrapper(f, suite)
+		wrapped = generate_test(f)
 		print ">>>>> Generated wrapper for", f.__module__ + "." + k, "..."
 		# replace locals with the wrapped version
 		localdict[k] = wrapped
 
-	# this function now only generates test cases
-	func.__call__()
+	# run the tests
+	runner.stream.writeln("**** Starting: %s ****" % testfunc.__name__)
+	startTime = datetime.now()
+	try:
+		testfunc.__call__()
+	finally:
+		# parse collected results
+		passed = [test for result in results for test in result.passed]
+		failures = [test for result in results for test in result.failures]
+		errors = [test for result in results for test in result.errors]
+		skipped = list(set(suite._tests).difference(passed))
+		
+		# generate summary log file
+		# logfile for storing run output text
+		log_fd, log = mkstemp()
+		with open(log, "w+") as f:
+			print >> f, "time:", startTime.strftime("%m-%d-%Y, %H:%M:%S")
+			print >> f, "passes:", len(passed)
+			print >> f, "failures:", len(failures) + len(errors)
+			print >> f, "untested:", len(skipped), "\n"
 
-	# test cases collected, clear to run!
-	return MufatTestRunner(stream=MufatLogger()).run(suite, func.__name__)
+			passed_ = map(lambda t: t.id(), passed)
+
+			# log stubs that were not run/failed
+			for test in suite:
+				print >> f, test.id()
+				print >> f, getmodule(test._testFunc).__file__
+				print >> f, (test.id() in passed_) and "1" or "0"
+				print >> f, getattr(test, "timeTaken", 0), "\n"
+
+		os.close(log_fd)
+		# localdict["result"] = result

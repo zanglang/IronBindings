@@ -62,7 +62,13 @@ namespace MVRuntimeLib
         {
             get
             {
-                return core ?? (core = new MVCore() as IMVCore);
+                if (core == null)
+                {
+                    core = new MVCore() as IMVCore;
+                    core.Init(0);
+                }
+
+                return core;
             }
         }
     }

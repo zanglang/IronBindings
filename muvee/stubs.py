@@ -167,14 +167,21 @@ def GetLastErrorDescription():
 	return Core.GetLastErrorDescription()
 
 @is_a_stub
-def SelectStandardStyle():
-	SetActiveMVStyle('S00516_Plain')
+def SetActiveMVStyle(style, check=False):
+	"""
+	Sets the current Muvee Style to `style`
+	
+	:param style: A string containing the name of the style, or a number representing
+	    the n-th index in the styles list
+	:param check: Whether to validate if the given parameter is in the list of
+	    available styles first.
+	"""
 
-@is_a_stub
-def SetActiveMVStyle(style):
 	from .mvrt import Core
-	# check if style name is valid
-	assert style in map(lambda s: s.InternalName, IMVStyleCollection(Core.Styles))
+	if check:
+		assert Core.Styles.Count > 0, "No styles found!"
+		# check if style name is valid
+		assert style in map(lambda s: s.InternalName, IMVStyleCollection(Core.Styles))
 	Core.SetActiveMVStyle(style)
 
 @is_a_stub
@@ -216,7 +223,7 @@ def AnalyseTillDone(resolution=1000, timeout=600):
 @is_a_stub
 def MakeTillDone(mode, duration):
 	"""
-	Calls `IMVCore.MakeMuveeTimeline` and blocks until done.
+	Calls `IMVCore.MakeMuveeTimeline` and blocks until making is done.
 	
 	:param mode: `muvee.MakeFlags` enum
 	:param duration: Duration of muvee in seconds
@@ -229,8 +236,8 @@ def MakeTillDone(mode, duration):
 @is_a_stub
 def ThreadedMakeTillDone(mode, duration):
 	"""
-	Calls `IMVCore.MakeMuveeTimeline` in a separate thread and polls it progress
-	until done.
+	Calls `IMVCore.MakeMuveeTimeline` in a separate thread and polls its
+	progress until making is done.
 	
 	:param mode: `muvee.MakeFlags` enum
 	:param duration: Duration of muvee in seconds
@@ -256,6 +263,20 @@ def ThreadedMakeTillDone(mode, duration):
 	except:
 		Core.CancelMake()
 		raise
+
+@is_a_stub
+def ThreadedMakeForSaveTillDone(mode, duration):
+	"""
+	Calls `IMVCore.MakeMuveeTimeline` in a separate thread with the
+	`muvee.MakeFlags.FORSAVING` flag enabled, and polls its progress
+	until making is done.
+	
+	:param mode: `muvee.MakeFlags` enum
+	:param duration: Duration of muvee in seconds
+	"""
+
+	mode |= MakeFlags.FORSAVING
+	ThreadedMakeTillDone(mode, duration)
 
 @is_a_stub
 def PreviewUntil(timeline, width=320, height=240, until=1):
