@@ -3,6 +3,7 @@ from functools import wraps
 from . import gen_stub, InitFlags, LoadFlags, MakeFlags, SourceType, TimelineType, \
 	IMVCaptionHighlight, IMVExclude, IMVHighlight, IMVOperatorInfo, IMVSource, \
 	IMVStyleCollection, IMVTargetRect, IMVTitleCredits
+from .testing import generate_test
 
 
 def is_a_stub(f):
@@ -12,7 +13,8 @@ def is_a_stub(f):
 	 """
 	@wraps(f)
 	def _wrap(*args, **kwargs):
-		return f(*args, **kwargs)
+		return generate_test(f, *args, **kwargs)
+
 	setattr(_wrap, "is_a_stub", True)
 	return _wrap
 
@@ -27,7 +29,6 @@ def Release():
 	from . import mvrt
 	mvrt.Release()
 
-@is_a_stub
 def AddSource(src, srctype=SourceType.UNKNOWN, loadtype=LoadFlags.VERIFYSUPPORT):
 	from .mvrt import Core
 	if srctype == SourceType.UNKNOWN:
@@ -42,7 +43,6 @@ def AddSource(src, srctype=SourceType.UNKNOWN, loadtype=LoadFlags.VERIFYSUPPORT)
 	assert Core.AddSource(srctype, src, loadtype), \
 			'AddSource failed: ' + GetLastErrorDescription()
 
-@is_a_stub
 def CreateSource(path, srctype):
 	from .mvrt import Core
 	# wrap IMVSource with stub
@@ -161,7 +161,6 @@ def ConfigRenderTL2File(path):
 	assert os.path.isfile(path) and os.path.splitext(path)[1] == '.bin'
 	Core.ConfigRenderTL2File(path)
 
-@is_a_stub
 def GetLastErrorDescription():
 	from .mvrt import Core
 	return Core.GetLastErrorDescription()
@@ -279,14 +278,21 @@ def ThreadedMakeForSaveTillDone(mode, duration):
 	ThreadedMakeTillDone(mode, duration)
 
 @is_a_stub
-def PreviewUntil(timeline, width=320, height=240, until=1):
+def PreviewTillDone(timeline=TimelineType.MUVEE, width=320, height=240):
 	"""
 	Creates a WinForms Window and renders the video preview to it
 	
 	:param timeline: `muvee.TimelineFlag` enum
 	:param width: Width of created window in pixels
 	:param height: Height of created window in pixels
-	:param until: Percentage of video to preview before automatically stopping
+	"""
+
+	"""
+	Creates a WinForms Window and renders the video preview to it
+	
+	:param timeline: `muvee.TimelineFlag` enum
+	:param width: Width of created window in pixels
+	:param height: Height of created window in pixels
 	"""
 
 	import clr
@@ -296,7 +302,6 @@ def PreviewUntil(timeline, width=320, height=240, until=1):
 
 	assert width > 0
 	assert height > 0
-	assert until > 0
 
 	# create winforms window
 	with Form(Text='MuFAT Test', Width=width, Height=height, TopMost=True) as f:
@@ -306,7 +311,7 @@ def PreviewUntil(timeline, width=320, height=240, until=1):
 			count = timeout = 3600
 			sleep = 1
 			try:
-				while prog < until:
+				while prog < 1.0:
 					prog = Core.GetRenderTL2WndProgress(timeline)
 					assert prog >= 0, "GetRenderTL2WndProgress failed: " + GetLastErrorDescription()
 					print "Progress:", prog,
@@ -322,6 +327,7 @@ def PreviewUntil(timeline, width=320, height=240, until=1):
 		def teardown(*args):
 			print 'Stopping.'
 			Core.StopRenderTL2WndProc(timeline)
+			Core.ShutdownRenderTL2Wnd(timeline)
 		f.Closing += teardown
 
 		# setup and start the rendering
@@ -330,18 +336,6 @@ def PreviewUntil(timeline, width=320, height=240, until=1):
 		Core.StartRenderTL2WndProc(timeline)
 		threading.Thread(target=checkProgress).start()
 		f.ShowDialog()
-
-@is_a_stub
-def PreviewTillDone(timeline=TimelineType.MUVEE, width=320, height=240):
-	"""
-	Creates a WinForms Window and renders the video preview to it
-	
-	:param timeline: `muvee.TimelineFlag` enum
-	:param width: Width of created window in pixels
-	:param height: Height of created window in pixels
-	"""
-
-	return PreviewUntil(timeline, width, height, until=1)
 
 @is_a_stub
 def SaveTillDone(filename, resolution=1000, timeout=600):

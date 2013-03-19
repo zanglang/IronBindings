@@ -161,6 +161,36 @@ def detect_media(*media):
 			shutil.copy(src, dest)
 
 
+class TestGenerator(object):
+	"""
+	Wraps a function call with `unittest.FunctionTestCase` and adds it to a
+	`unittest.TestSuite`.
+	"""
+
+	def __call__(self, testfunc, *args, **kwargs):
+		# detect missing media or binfiles that needs copying
+		if args:
+			detect_media(*args)
+		if kwargs:
+			detect_media(kwargs.values())
+
+		@wraps(testfunc)
+		def _wrap():
+			# print ">>>>> Delegating function call to", testfunc.__name__
+			return testfunc(*args, **kwargs)
+		
+		# default behaviour = directly call wrapped function
+		if not hasattr(self, 'runner'):
+			return _wrap(*args, **kwargs)
+		else:
+			print ">>>>> Generating wrapper for", testfunc.__module__ + "." + testfunc.__name__, "..."
+			case = unittest.FunctionTestCase(_wrap)
+			self.suite.addTest(case)
+			self.results.append(self.runner.run(case))
+
+generate_test = TestGenerator()
+
+
 def run(testfunc):
 	"""
 	Generates a `unittest.TestSuite` out of a given function `func` by creating
@@ -179,46 +209,17 @@ def run(testfunc):
 	localdict = frame.f_back.f_locals
 
 	# setup unittest
-	runner = MufatTestRunner(stream=MufatLogger())
-	suite = unittest.TestSuite()
-	results = []
-
-	def generate_test(func):
-		"""
-		Wraps a function call with `unittest.FunctionTestCase` and adds it to a
-		`unittest.TestSuite`.
-		"""
-
-		@wraps(func)
-		def wrapper(*args, **kwargs):
-			@wraps(func)
-			def _wrap():
-				print ">>>>> Delegating function call to", func.__name__
-				func(*args, **kwargs)
-			case = unittest.FunctionTestCase(_wrap)
-			# detect missing media or binfiles that needs copying
-			if args:
-				detect_media(*args)
-			if kwargs:
-				detect_media(kwargs.values())
-			suite.addTest(case)
-			results.append(runner.run(case))
-		return wrapper
-
-	for k, f in localdict.items():
-		# stubs are identified by having applied @stubs.is_a_stub decorators
-		if type(f) != FunctionType or not getattr(f, "is_a_stub", False):
-			continue
-		wrapped = generate_test(f)
-		print ">>>>> Generated wrapper for", f.__module__ + "." + k, "..."
-		# replace locals with the wrapped version
-		localdict[k] = wrapped
+	runner = generate_test.runner = MufatTestRunner(stream=MufatLogger())
+	suite = generate_test.suite = unittest.TestSuite()
+	results = generate_test.results = []
 
 	# run the tests
 	runner.stream.writeln("**** Starting: %s ****" % testfunc.__name__)
 	startTime = datetime.now()
 	try:
 		testfunc.__call__()
+	except:
+		raise
 	finally:
 		# parse collected results
 		passed = [test for result in results for test in result.passed]
@@ -245,4 +246,8 @@ def run(testfunc):
 				print >> f, getattr(test, "timeTaken", 0), "\n"
 
 		os.close(log_fd)
-		# localdict["result"] = result
+		localdict["passed"] = len(passed)
+		localdict["failed"] = len(failures) + len(errors)
+		localdict["skipped"] = len(skipped)
+		localdict["logfile"] = log
+		return len(passed), len(failures) + len(errors), len(skipped), log
