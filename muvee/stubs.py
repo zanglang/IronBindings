@@ -60,6 +60,55 @@ def CreateSource(path, srctype):
 		src.Load(path, LoadFlags.CONTEXT)
 	return src.get()
 
+def PreviewSourceTillDone(src, width=320, height=240):
+	"""
+	Creates a WinForms Window and renders the video preview to it
+	
+	:param src: source object to be rendered
+	:param width: Width of created window in pixels
+	:param height: Height of created window in pixels
+	"""
+
+	import clr
+	clr.AddReference('System.Windows.Forms')
+	from System.Windows.Forms import Form
+
+	assert width > 0
+	assert height > 0
+
+	# create winforms window
+	with Form(Text='MuFAT Test', Width=width, Height=height, TopMost=True) as f:
+		# check progress in separate thread
+		def checkProgress():
+			prog = -1
+			count = timeout = 3600
+			sleep = 1
+			try:
+				while prog < 1.0:
+					prog = src.GetRenderProgress()
+					assert prog >= 0, "GetRenderProgress failed: " + GetLastErrorDescription()
+					print "Progress:", prog,
+
+					count -= 1
+					assert count >= 0, "Timed out after %d repetitions." % timeout
+					time.sleep(sleep)
+				print "done."
+			finally:
+				f.Close()
+
+		# stop the rendering if window is closed
+		def teardown(*args):
+			print 'Stopping.'
+			src.StopRenderProc()
+			src.ShutdownRender()
+		f.Closing += teardown
+
+		# setup and start the rendering
+		assert src.SetupRender(f.Handle, 0, 0, width, height, None), \
+			'SetupRender failed: ' + GetLastErrorDescription()
+		src.StartRenderProc()
+		threading.Thread(target=checkProgress).start()
+		f.ShowDialog()
 @is_a_stub
 def AddSourceImage(path):
 	src = CreateSource(path, SourceType.IMAGE)
@@ -435,52 +484,7 @@ def SaveTillDoneWithPreview(filename, resolution=1000, timeout=600, width=320, h
 		f.ShowDialog()
 
 @is_a_stub
-def PreviewSourceTillDone(src, width=320, height=240):
-	"""
-	Creates a WinForms Window and renders the video preview to it
-	
-	:param src: source object to be rendered
-	:param width: Width of created window in pixels
-	:param height: Height of created window in pixels
-	"""
-
-	import clr
-	clr.AddReference('System.Windows.Forms')
-	from System.Windows.Forms import Form
-
-	assert width > 0
-	assert height > 0
-
-	# create winforms window
-	with Form(Text='MuFAT Test', Width=width, Height=height, TopMost=True) as f:
-		# check progress in separate thread
-		def checkProgress():
-			prog = -1
-			count = timeout = 3600
-			sleep = 1
-			try:
-				while prog < 1.0:
-					prog = src.GetRenderProgress()
-					assert prog >= 0, "GetRenderProgress failed: " + GetLastErrorDescription()
-					print "Progress:", prog,
-
-					count -= 1
-					assert count >= 0, "Timed out after %d repetitions." % timeout
-					time.sleep(sleep)
-				print "done."
-			finally:
-				f.Close()
-
-		# stop the rendering if window is closed
-		def teardown(*args):
-			print 'Stopping.'
-			src.StopRenderProc()
-			src.ShutdownRender()
-		f.Closing += teardown
-
-		# setup and start the rendering
-		assert src.SetupRender(f.Handle, 0, 0, width, height, None), \
-			'SetupRender failed: ' + GetLastErrorDescription()
-		src.StartRenderProc()
-		threading.Thread(target=checkProgress).start()
-		f.ShowDialog()
+def AddSourceVideoWithPreviewTillDone(path, **kwargs):
+	src = CreateSource(path, SourceType.VIDEO)
+	AddSource(src, SourceType.VIDEO, LoadFlags.VERIFYSUPPORT)
+	PreviewSourceTillDone(src, **kwargs)
