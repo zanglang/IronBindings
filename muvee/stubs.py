@@ -1,6 +1,6 @@
 import os, threading, time
 from functools import wraps
-from . import gen_stub, InitFlags, LoadFlags, MakeFlags, SourceType, TimelineType, \
+from . import gen_stub, ArType, InitFlags, LoadFlags, MakeFlags, SourceType, TimelineType, \
 	IMVCaptionHighlight, IMVExclude, IMVHighlight, IMVOperatorInfo, IMVSource, \
 	IMVStyleCollection, IMVTargetRect, IMVTitleCredits
 from .testing import generate_test
@@ -196,6 +196,31 @@ def PutTitleString(title):
 	titles.TitleString = title
 
 @is_a_stub
+def PutAspectRatio(ratio):
+	from .mvrt import Core
+	assert ratio in ArType.__dict__
+	Core.AspectRatio = ratio
+
+@is_a_stub
+def PutDescriptorFolder(path):
+	from .mvrt import Core
+	if not os.path.exists(path):
+		os.makedirs(path)
+	Core.DescriptorFolder = path
+
+@is_a_stub
+def PutSyncSoundLevel(level):
+	from .mvrt import Core
+	assert 0 <= level <= 1
+	Core.SyncSoundLevel = level
+
+@is_a_stub
+def PutMusicLevel(level):
+	from .mvrt import Core
+	assert 0 <= level <= 1
+	Core.MusicLevel = level
+
+@is_a_stub
 def AnalyseTillDone(resolution=1000, timeout=600):
 	from .mvrt import Core
 
@@ -279,14 +304,6 @@ def ThreadedMakeForSaveTillDone(mode, duration):
 def PreviewTillDone(timeline=TimelineType.MUVEE, width=320, height=240):
 	"""
 	Creates a WinForms Window and renders the muvee preview to it
-	
-	:param timeline: `muvee.TimelineFlag` enum
-	:param width: Width of created window in pixels
-	:param height: Height of created window in pixels
-	"""
-
-	"""
-	Creates a WinForms Window and renders the video preview to it
 	
 	:param timeline: `muvee.TimelineFlag` enum
 	:param width: Width of created window in pixels
@@ -428,7 +445,6 @@ def PreviewSourceTillDone(src, width=320, height=240):
 	"""
 
 	import clr
-	from .mvrt import Core
 	clr.AddReference('System.Windows.Forms')
 	from System.Windows.Forms import Form
 
@@ -444,7 +460,7 @@ def PreviewSourceTillDone(src, width=320, height=240):
 			sleep = 1
 			try:
 				while prog < 1.0:
-					prog = IMVSource(src).GetRenderProgress()
+					prog = src.GetRenderProgress()
 					assert prog >= 0, "GetRenderProgress failed: " + GetLastErrorDescription()
 					print "Progress:", prog,
 
@@ -458,13 +474,13 @@ def PreviewSourceTillDone(src, width=320, height=240):
 		# stop the rendering if window is closed
 		def teardown(*args):
 			print 'Stopping.'
-			IMVSource(src).StopRenderProc()
-			IMVSource(src).ShutdownRender()
+			src.StopRenderProc()
+			src.ShutdownRender()
 		f.Closing += teardown
 
 		# setup and start the rendering
-		assert IMVSource(src).SetupRender(f.Handle, 0, 0, width, height, None), \
+		assert src.SetupRender(f.Handle, 0, 0, width, height, None), \
 			'SetupRender failed: ' + GetLastErrorDescription()
-		IMVSource(src).StartRenderProc()
+		src.StartRenderProc()
 		threading.Thread(target=checkProgress).start()
 		f.ShowDialog()

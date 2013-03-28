@@ -181,7 +181,7 @@ class TestGenerator(object):
 		
 		# default behaviour = directly call wrapped function
 		if not hasattr(self, 'runner'):
-			return _wrap(*args, **kwargs)
+			return _wrap()
 		else:
 			print ">>>>> Generating wrapper for", testfunc.__module__ + "." + testfunc.__name__, "..."
 			case = unittest.FunctionTestCase(_wrap)
@@ -218,8 +218,6 @@ def run(testfunc):
 	startTime = datetime.now()
 	try:
 		testfunc.__call__()
-	except:
-		raise
 	finally:
 		# parse collected results
 		passed = [test for result in results for test in result.passed]

@@ -145,6 +145,11 @@ class TimelineType:
 	_src = MV_TL_TYPE_ENUM
 	_prefix = 'TL_TYPE_'
 
+@enum
+class ArType:
+	_src = MV_AR_TYPE_ENUM
+	_prefix = 'AR_TYPE'
+
 import sys
 import mvrt
 sys.modules['muvee.mvrt'] = mvrt
