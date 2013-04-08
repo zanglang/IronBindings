@@ -247,7 +247,7 @@ def PutTitleString(title):
 @is_a_stub
 def PutAspectRatio(ratio):
 	from .mvrt import Core
-	assert ratio in ArType.__dict__
+	assert ratio in ArType.__dict__.values()
 	Core.AspectRatio = ratio
 
 @is_a_stub
