@@ -1,4 +1,4 @@
-import os, re, shutil, sys, unittest
+import os, re, shutil, sys, traceback, unittest
 from datetime import datetime
 from functools import wraps
 from inspect import currentframe, getmodule
@@ -218,6 +218,9 @@ def run(testfunc):
 	startTime = datetime.now()
 	try:
 		testfunc.__call__()
+	except:
+		print "**** ABORTED! ****\n", traceback.format_exc()
+		raise
 	finally:
 		# parse collected results
 		passed = [test for result in results for test in result.passed]
