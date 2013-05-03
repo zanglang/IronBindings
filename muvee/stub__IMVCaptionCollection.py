@@ -1,7 +1,7 @@
 from xml.etree import ElementTree as etree
-from . import class_stub, ProxyMixin
+from . import stub_class, ProxyMixin
 
-@class_stub
+@stub_class
 class IMVCaptionCollection(ProxyMixin):
 	"""Pythonic wrapper for MVRuntimeLib.IMVCaptionCollection"""
 

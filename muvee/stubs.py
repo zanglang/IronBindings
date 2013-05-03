@@ -1,3 +1,17 @@
+"""
+All function stubs that make up a muFAT run are implemented here. Essentially,
+a 'stub' is any function that when called once inside a run performs any number
+of tasks, while hiding the underlying nitty gritty details of mucking about with
+muvee's COM interfaces.
+
+All of these function stubs will be imported into the 'muvee.*' module namespace.
+
+Example stubs:
+- muvee.Init
+- muvee.Release
+- muvee.AddSourceImage
+"""
+
 import inspect, os, threading, time
 from functools import wraps
 from xml.etree import ElementTree as etree
@@ -6,13 +20,20 @@ from . import gen_stub, ArType, InitFlags, LoadFlags, MakeFlags, SourceType, Tim
 	IMVPrimaryCaption, IMVProductionOverlay, IMVSource, IMVSourceCaption, \
 	IMVStyleCollection, IMVStyleEx, IMVTargetRect, IMVTitleCredits
 from .testing import detect_media, generate_test
+from .window import Window
 
 
 def is_a_stub(f):
 	"""
 	Marks the function as a test stub, so that `muvee.testing.MufatTestRunner`
-	can discover and wrap the function as a `unittest.FunctionTestCase`
+	can discover and wrap the function as a `unittest.FunctionTestCase`.
+
+	Alternatively, when a testcase is run by `muvee.testing.run`, any functions
+	decorated by '@is_a_stub' will be dynamically wrapped as a
+	`unittest.FunctionTestCase` before being executed as part of an ongoing
+	test suite.
 	 """
+
 	@wraps(f)
 	def _wrap(*args, **kwargs):
 		return generate_test(f, *args, **kwargs)
@@ -23,11 +44,15 @@ def is_a_stub(f):
 
 @is_a_stub
 def Init(flags=InitFlags.DEFAULT):
+	"""Initializes MVRuntime.MVCore"""
+
 	from .mvrt import Core
 	Core.Init(flags)
 
 @is_a_stub
 def Release():
+	"""Releases the COM reference to MVRuntime"""
+
 	from . import mvrt
 	mvrt.Release()
 
@@ -35,7 +60,7 @@ def AddSource(src, srctype=SourceType.UNKNOWN, loadtype=LoadFlags.VERIFYSUPPORT)
 	from .mvrt import Core
 	if srctype == SourceType.UNKNOWN:
 		# guess source type from the returned class name
-		typename = IMVSource(src).TypeName
+		typename = get_type(src)
 		if 'MVSource_Image' in typename:
 			srctype = SourceType.IMAGE
 		elif 'MVSource_Music' in typename:
@@ -46,9 +71,15 @@ def AddSource(src, srctype=SourceType.UNKNOWN, loadtype=LoadFlags.VERIFYSUPPORT)
 			'AddSource failed: ' + GetLastErrorDescription()
 
 def CreateSource(path, srctype):
+	"""
+	Creates and returns an IMVSource object for the given file and source type.
+
+	:param path: Path to the source file
+	:param srctype: `muvee.SourceType` enumeration
+	"""
+
 	from .mvrt import Core
-	# wrap IMVSource with stub
-	src = IMVSource(Core.CreateMVSource(srctype))
+	src = Core.CreateMVSource(srctype)
 	if srctype in [ SourceType.IMAGE, SourceType.MUSIC, SourceType.VIDEO ]:
 		assert os.path.exists(path), "File %s does not exist" % path
 		assert src.LoadFile(path, LoadFlags.VERIFYSUPPORT), \
@@ -60,7 +91,7 @@ def CreateSource(path, srctype):
 	else:
 		# not a file source type
 		src.Load(path, LoadFlags.CONTEXT)
-	return src.get()
+	return src
 
 @is_a_stub
 def AddSourceImage(path):
@@ -69,9 +100,15 @@ def AddSourceImage(path):
 
 @is_a_stub
 def AddSourceImageWithCaption(path, caption):
-	src = IMVSource(CreateSource(path, SourceType.IMAGE))
-	src.AddCaption(caption)
-	AddSource(src.get(), SourceType.IMAGE, LoadFlags.VERIFYSUPPORT)
+	from . import IMVCaptionCollection
+	src = CreateSource(path, SourceType.IMAGE)
+	captions = IMVCaptionCollection(src.Captions)
+	assert captions.AddCaption(caption) is not None, \
+		'AddCaption failed: ' + GetLastErrorDescription()
+	assert len(captions) > 0
+	assert captions.VerifyUserDscrp(), \
+		'VerifyUserDscrp failed: ' + GetLastErrorDescription()
+	AddSource(src, SourceType.IMAGE, LoadFlags.VERIFYSUPPORT)
 
 @is_a_stub
 def AddSourceImageWithMagicSpot(path, *args):
@@ -267,6 +304,46 @@ def PutMusicLevel(level):
 	assert 0 <= level <= 1
 	Core.MusicLevel = level
 
+def CheckProgress(poll_func, timeout=3600, sleep=1, onStop=None):
+	"""
+	Runs a while loop to check a task's running progress until it completes or
+	times out.
+	
+	:param poll_func: Function callback to use to fetch the current progress.
+		Must return a number.
+	:param timeout: How many seconds before the polled task is considered to
+		have timed out and may be cancelled. Default: 60 minutes.
+	:param sleep: How many seconds to wait in between polls. Default: 1 second.
+	:param onStop: Function to call when the loop has indicated that the task
+		is complete, or has timed out, or has failed due to an exception.
+	"""
+
+	prog = -1
+	count = timeout
+	try:
+		while prog < 1.0:
+			# fetch current progress from function
+			prog = poll_func.__call__()
+			print r"Progress: %.2f" % prog
+			count -= 1
+			assert count >= 0, "Timed out after %d repetitions." % timeout
+			time.sleep(sleep)
+	except KeyboardInterrupt:
+		pass
+	finally:
+		# cleanup and call teardown function
+		print "done."
+		if onStop is not None:
+			onStop.__call__()
+
+def StartCheckProgress(poll_func, timeout=3600, sleep=1, onStop=None):
+	"""
+	Same as `CheckProgress`, but starts another thread to run it asynchronously.
+	"""
+
+	threading.Thread(target=CheckProgress, \
+		args=(poll_func, timeout, sleep, onStop)).start()
+
 @is_a_stub
 def AnalyseTillDone(resolution=1000, timeout=600):
 	"""
@@ -284,21 +361,8 @@ def AnalyseTillDone(resolution=1000, timeout=600):
 
 	assert Core.StartAnalysisProc(0), \
 		("StartAnalysisProc failed: ", GetLastErrorDescription())
-	try:
-		prog = -1
-		count = timeout
-		sleep = resolution/1000.0
-		while prog < 1:
-			prog = Core.GetAnalysisProgress()
-			print "Progress:", prog
-
-			count -= 1
-			assert count >= 0, "Timed out after %d repetitions." % timeout
-			time.sleep(sleep)
-	except:
-		Core.StopAnalysisProc()
-		raise
-	return True
+	CheckProgress(lambda: Core.GetAnalysisProgress(), timeout=timeout,
+			sleep=resolution/1000.0, onStop=lambda: Core.StopAnalysisProc())
 
 @is_a_stub
 def MakeTillDone(mode, duration):
@@ -328,21 +392,11 @@ def ThreadedMakeTillDone(mode, duration):
 
 	assert Core.MakeMuveeTimeline(mode, duration), \
 		"MakeMuveeTimeline failed: " + GetLastErrorDescription()
-	try:
-		prog = -1
-		count = timeout = 600
-		sleep = 1 # 1 second
-		while prog < 1:
-			prog = Core.GetMakeProgress()
-			assert prog >= 0, "GetMakeProgress failed: " + GetLastErrorDescription()
-			print "Progress:", prog
-
-			count -= 1
-			assert count >= 0, "Timed out after %d repetitions." % timeout
-			time.sleep(sleep)
-	except:
-		Core.CancelMake()
-		raise
+	def poll():
+		prog = Core.GetMakeProgress()
+		assert prog >= 0, "GetMakeProgress failed: " + GetLastErrorDescription()
+		return prog
+	CheckProgress(poll, timeout=600, onStop=lambda: Core.CancelMake())
 
 @is_a_stub
 def ThreadedMakeForSaveTillDone(mode, duration):
@@ -369,47 +423,34 @@ def PreviewTillDone(timeline=TimelineType.MUVEE, width=320, height=240):
 	:param height: Height of created window in pixels
 	"""
 
-	import clr
 	from .mvrt import Core
-	clr.AddReference('System.Windows.Forms')
-	from System.Windows.Forms import Form
-
 	assert width > 0
 	assert height > 0
 
 	# create winforms window
-	with Form(Text='MuFAT Test', Width=width, Height=height, TopMost=True) as f:
-		# check progress in separate thread
-		def checkProgress():
-			prog = -1
-			count = timeout = 3600
-			sleep = 1
-			try:
-				while prog < 1.0:
-					prog = Core.GetRenderTL2WndProgress(timeline)
-					assert prog >= 0, "GetRenderTL2WndProgress failed: " + GetLastErrorDescription()
-					print "Progress:", prog,
+	class Preview(Window):
+		def __enter__(self):
+			# setup and start the rendering
+			assert Core.SetupRenderTL2Wnd(timeline, self.hwnd, 0, 0, width, height, None), \
+					'SetupRenderTL2Wnd failed: ' + GetLastErrorDescription()
+			Core.StartRenderTL2WndProc(timeline)
+			StartCheckProgress(self.poll, onStop=lambda: self.close())
+			return self
 
-					count -= 1
-					assert count >= 0, "Timed out after %d repetitions." % timeout
-					time.sleep(sleep)
-				print "done."
-			finally:
-				f.Close()
+		def poll(self):
+			# get preview progress
+			prog = Core.GetRenderTL2WndProgress(timeline)
+			assert prog >= 0, "GetRenderTL2WndProgress failed: " + GetLastErrorDescription()
+			return prog
 
-		# stop the rendering if window is closed
-		def teardown(*args):
+		def __exit__(self, *args):
 			print 'Stopping.'
 			Core.StopRenderTL2WndProc(timeline)
 			Core.ShutdownRenderTL2Wnd(timeline)
-		f.Closing += teardown
 
-		# setup and start the rendering
-		assert Core.SetupRenderTL2Wnd(timeline, f.Handle, 0, 0, width, height, None), \
-			'SetupRenderTL2Wnd failed: ' + GetLastErrorDescription()
-		Core.StartRenderTL2WndProc(timeline)
-		threading.Thread(target=checkProgress).start()
-		f.ShowDialog()
+	with Preview(width, height) as p:
+		p.show()
+
 
 @is_a_stub
 def SaveTillDone(filename, resolution=1000, timeout=600):
@@ -432,21 +473,12 @@ def SaveTillDone(filename, resolution=1000, timeout=600):
 
 	assert Core.StartRenderTL2FileProc(path, None, 0, 0, 0, 0, None) >= 0, \
 			("StartRenderTL2FileProc failed: " + GetLastErrorDescription())
-	try:
-		prog = -1
-		count = timeout
-		sleep = resolution/1000.0
-		while prog < 1:
-			prog = Core.GetRenderTL2FileProgress()
-			assert prog >= 0, "GetRenderTL2FileProgress failed: " + GetLastErrorDescription()
-			print "Progress:", prog
-
-			count -= 1
-			assert count >= 0, "Timed out after %d repetitions." % timeout
-			time.sleep(sleep)
-	except:
-		Core.StopRenderTL2FileProc()
-		raise
+	def poll():
+		prog = Core.GetRenderTL2FileProgress()
+		assert prog >= 0, "GetRenderTL2FileProgress failed: " + GetLastErrorDescription()
+		return prog
+	StartCheckProgress(self.poll, timeout=timeout, \
+		onStop=lambda: Core.StopRenderTL2FileProc())
 
 @is_a_stub
 def SaveTillDoneWithPreview(filename, resolution=1000, timeout=600, width=320, height=240):
@@ -461,11 +493,7 @@ def SaveTillDoneWithPreview(filename, resolution=1000, timeout=600, width=320, h
 		Default: 600 polls.
 	"""
 
-	import clr
 	from .mvrt import Core
-	clr.AddReference('System.Windows.Forms')
-	from System.Windows.Forms import Form
-
 	assert width > 0
 	assert height > 0
 	caller = inspect.getouterframes(inspect.currentframe())[-1][1]
@@ -474,36 +502,27 @@ def SaveTillDoneWithPreview(filename, resolution=1000, timeout=600, width=320, h
 					.replace("[ConfigName]", runname)
 
 	# create winforms window
-	with Form(Text='MuFAT Test', Width=width, Height=height, TopMost=True) as f:
-		# check progress in separate thread
-		def checkProgress():
-			prog = -1
-			count = timeout
-			sleep = resolution/1000.0
-			try:
-				while prog < 1:
-					prog = Core.GetRenderTL2FileProgress()
-					assert prog >= 0, "GetRenderTL2FileProgress failed: " + GetLastErrorDescription()
-					print "Progress:", prog
+	class Preview(Window):
+		def __enter__(self):
+			# setup and start the rendering
+			assert Core.StartRenderTL2FileProc(path, self.hwnd, 0, 0, width, height, None) >= 0, \
+				("StartRenderTL2FileProc failed: " + GetLastErrorDescription())
+			StartCheckProgress(self.poll, timeout=timeout, \
+					sleep=resolution/1000.0, onStop=lambda: self.close())
+			return self
 
-					count -= 1
-					assert count >= 0, "Timed out after %d repetitions." % timeout
-					time.sleep(sleep)
-				print "done."
-			finally:
-				f.Close()
+		def poll(self):
+			# get saving progress
+			prog = Core.GetRenderTL2FileProgress()
+			assert prog >= 0, "GetRenderTL2FileProgress failed: " + GetLastErrorDescription()
+			return prog
 
-		# stop the rendering if window is closed
-		def teardown(*args):
+		def __exit__(self, *args):
 			print 'Stopping.'
 			Core.StopRenderTL2FileProc()
-		f.Closing += teardown
 
-		# setup and start the rendering
-		assert Core.StartRenderTL2FileProc(path, f.Handle, 0, 0, width, height, None) >= 0, \
-			("StartRenderTL2FileProc failed: " + GetLastErrorDescription())
-		threading.Thread(target=checkProgress).start()
-		f.ShowDialog()
+	with Preview(width, height) as p:
+		p.show()
 
 def PreviewSourceTillDone(src, width=320, height=240):
 	"""
@@ -514,46 +533,32 @@ def PreviewSourceTillDone(src, width=320, height=240):
 	:param height: Height of created window in pixels
 	"""
 
-	import clr
-	clr.AddReference('System.Windows.Forms')
-	from System.Windows.Forms import Form
-
 	assert width > 0
 	assert height > 0
 
 	# create winforms window
-	with Form(Text='MuFAT Test', Width=width, Height=height, TopMost=True) as f:
-		# check progress in separate thread
-		def checkProgress():
-			prog = -1
-			count = timeout = 3600
-			sleep = 1
-			try:
-				while prog < 1.0:
-					prog = src.GetRenderProgress()
-					assert prog >= 0, "GetRenderProgress failed: " + GetLastErrorDescription()
-					print "Progress:", prog,
+	class Preview(Window):
+		def __enter__(self):
+			# setup and start the rendering
+			assert src.SetupRender(self.hwnd, 0, 0, width, height, None), \
+				'SetupRender failed: ' + GetLastErrorDescription()
+			src.StartRenderProc()
+			StartCheckProgress(self.poll, timeout=3600, onStop=lambda: self.close())
+			return self
 
-					count -= 1
-					assert count >= 0, "Timed out after %d repetitions." % timeout
-					time.sleep(sleep)
-				print "done."
-			finally:
-				f.Close()
+		def poll(self):
+			# get preview progress
+			prog = src.GetRenderProgress()
+			assert prog >= 0, "GetRenderProgress failed: " + GetLastErrorDescription()
+			return prog
 
-		# stop the rendering if window is closed
-		def teardown(*args):
+		def __exit__(self, *args):
 			print 'Stopping.'
 			src.StopRenderProc()
 			src.ShutdownRender()
-		f.Closing += teardown
 
-		# setup and start the rendering
-		assert src.SetupRender(f.Handle, 0, 0, width, height, None), \
-			'SetupRender failed: ' + GetLastErrorDescription()
-		src.StartRenderProc()
-		threading.Thread(target=checkProgress).start()
-		f.ShowDialog()
+	with Preview(width, height) as p:
+		p.show()
 
 @is_a_stub
 def AddSourceVideoWithPreviewTillDone(path, height=320, width=240):

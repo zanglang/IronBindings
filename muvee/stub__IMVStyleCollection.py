@@ -1,6 +1,6 @@
-from . import class_stub, ProxyMixin
+from . import stub_class, ProxyMixin
 
-@class_stub
+@stub_class
 class IMVStyleCollection(ProxyMixin):
 	"""Pythonic wrapper for MVRuntimeLib.IMVStyleCollection"""
 

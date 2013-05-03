@@ -1,3 +1,7 @@
+"""
+Functions related to running muFAT unit tests
+"""
+
 import os, re, shutil, sys, traceback, unittest
 from datetime import datetime
 from functools import wraps
@@ -29,7 +33,7 @@ class MufatLogger(object):
 		sys.stdout = self.stdout
 
 	def write(self, *args):
-		# append to logfile and print to stdout
+		# try to both append to logfile and print to stdout
 		try:
 			with open(self.file, 'a') as f:
 				f.write(*args)
