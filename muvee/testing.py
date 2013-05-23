@@ -11,6 +11,47 @@ from tempfile import mkstemp
 from types import FunctionType
 
 
+def normalize(path):
+	mappings = {
+		r"c:\mufat_repo": os.path.expanduser("~/mufat_repo"),
+		r"c:\muveedebug": "/muveedebug",
+		r"y:": "/Volumes/muFAT",
+	}
+
+	if sys.platform == 'cli' or sys.platform.startswith("win"):
+		return os.path.normpath(path)
+
+	# else, on nix/darwin
+	_path = path.lower()
+	for k, v in mappings.iteritems():
+		if _path.startswith(k):
+			pattern = re.compile(re.escape(k), re.IGNORECASE)
+			return pattern.sub(v, path).replace("\\", "/")
+
+	return path.replace("\\", "/")
+
+
+def detect_media(*media):
+	if sys.platform == 'cli' or sys.platform.startswith("win"):
+		LOCAL = os.path.expanduser(r"C:\mufat_repo")
+		REMOTE = r"T:\\testsets\\muFAT_SDKRuntime"
+	else:
+		LOCAL = os.path.expanduser("~/mufat_repo")
+		REMOTE = "/Volumes/TestMedia/TestSets/muFAT_SDKRuntime"
+	local_re = re.compile(re.escape(LOCAL), re.IGNORECASE)
+	remote_re = re.compile(re.escape(REMOTE), re.IGNORECASE)
+	media = filter(lambda s: isinstance(s, basestring), media)
+	for dest in media:
+		if not local_re.findall(dest) and not remote_re.findall(dest):
+			continue
+		src = local_re.sub(REMOTE, dest)
+		if not os.path.exists(dest) or os.stat(src).st_size != os.stat(dest).st_size:
+			if not os.path.exists(os.path.dirname(dest)):
+				os.makedirs(os.path.dirname(dest))
+			print "Copying %s -> %s" % (src, dest)
+			shutil.copy(src, dest)
+
+
 class MufatLogger(object):
 	"""
 	File-like object class that writes all text input to the muveedebug log folder.
@@ -21,7 +62,8 @@ class MufatLogger(object):
 	def __init__(self):
 		# check if logfiles exist
 		exists = lambda a, b: os.path.isfile(a) and a or b
-		self.file = reduce(exists, [r'c:\muveedebug\Log.txt', 'c:\muveedebug\LoggingError.txt'])
+		paths = map(normalize, [r'c:\muveedebug\Log.txt', 'c:\muveedebug\LoggingError.txt'])
+		self.file = reduce(exists, paths)
 		if not os.path.exists(os.path.dirname(self.file)):
 			os.makedirs(os.path.dirname(self.file))
 		self.stdout = sys.stdout
@@ -146,23 +188,6 @@ class MufatTestRunner(unittest.TextTestRunner):
 
 		# execute tests
 		return super(MufatTestRunner, self).run(suite)
-
-
-def detect_media(*media):
-	LOCAL = os.path.expanduser(r"C:\mufat_repo")
-	REMOTE = r"T:\\testsets\\muFAT_SDKRuntime"
-	local_re = re.compile(re.escape(LOCAL), re.IGNORECASE)
-	remote_re = re.compile(re.escape(REMOTE), re.IGNORECASE)
-	media = filter(lambda s: isinstance(s, basestring), media)
-	for dest in media:
-		if not local_re.findall(dest) and not remote_re.findall(dest):
-			continue
-		src = local_re.sub(REMOTE, dest)
-		if not os.path.exists(dest) or os.stat(src).st_size != os.stat(dest).st_size:
-			if not os.path.exists(os.path.dirname(dest)):
-				os.makedirs(os.path.dirname(dest))
-			print "Copying %s -> %s" % (src, dest)
-			shutil.copy(src, dest)
 
 
 class TestGenerator(object):

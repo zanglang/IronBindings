@@ -12,14 +12,14 @@ Example stubs:
 - muvee.AddSourceImage
 """
 
-import inspect, os, threading, time
+import inspect, os, re, sys, threading, time
 from functools import wraps
 from xml.etree import ElementTree as etree
-from . import gen_stub, ArType, InitFlags, LoadFlags, MakeFlags, SourceType, TimelineType, \
-	IMVCaptionHighlight, IMVExclude, IMVHighlight, IMVImageInfo, IMVOperatorInfo, \
-	IMVPrimaryCaption, IMVProductionOverlay, IMVSource, IMVSourceCaption, \
-	IMVStyleCollection, IMVStyleEx, IMVTargetRect, IMVTitleCredits
-from .testing import detect_media, generate_test
+from . import gen_stub, ArType, InitFlags, LoadFlags, MakeFlags, SourceType, \
+	TimelineType, IMVExclude, IMVHighlight, IMVImageInfo, IMVOperatorInfo, \
+	IMVPrimaryCaption, IMVSource, IMVStyleCollection, IMVStyleEx, \
+	IMVSupportMultiCaptions, IMVTargetRect, IMVTitleCredits
+from .testing import detect_media, generate_test, normalize
 from .window import Window
 
 
@@ -41,6 +41,10 @@ def is_a_stub(f):
 	setattr(_wrap, "is_a_stub", True)
 	return _wrap
 
+def is_true_or_non_zero(ret):
+	return ret is None or ret is True or \
+		(type(ret) in [ int, float ] and ret >= 0)
+
 
 @is_a_stub
 def Init(flags=InitFlags.DEFAULT):
@@ -56,17 +60,13 @@ def Release():
 	from . import mvrt
 	mvrt.Release()
 
+
+
 def AddSource(src, srctype=SourceType.UNKNOWN, loadtype=LoadFlags.VERIFYSUPPORT):
 	from .mvrt import Core
+	# guess type from source object
 	if srctype == SourceType.UNKNOWN:
-		# guess source type from the returned class name
-		typename = get_type(src)
-		if 'MVSource_Image' in typename:
-			srctype = SourceType.IMAGE
-		elif 'MVSource_Music' in typename:
-			srctype = SourceType.MUSIC
-		elif 'MVSource_Video' in typename:
-			srctype = SourceType.VIDEO
+		srctype = int(src.Type)
 	assert Core.AddSource(srctype, src, loadtype), \
 			'AddSource failed: ' + GetLastErrorDescription()
 
@@ -81,6 +81,7 @@ def CreateSource(path, srctype):
 	from .mvrt import Core
 	src = Core.CreateMVSource(srctype)
 	if srctype in [ SourceType.IMAGE, SourceType.MUSIC, SourceType.VIDEO ]:
+		path = normalize(path)
 		assert os.path.exists(path), "File %s does not exist" % path
 		assert src.LoadFile(path, LoadFlags.VERIFYSUPPORT), \
 			'LoadFile failed: ' + GetLastErrorDescription()
@@ -102,7 +103,11 @@ def AddSourceImage(path):
 def AddSourceImageWithCaption(path, caption):
 	from . import IMVCaptionCollection
 	src = CreateSource(path, SourceType.IMAGE)
-	captions = IMVCaptionCollection(src.Captions)
+	if hasattr(src, 'Captions'):
+		supports = src.Captions
+	else:
+		supports = gen_stub(IMVSupportMultiCaptions)(src).Captions
+	captions = IMVCaptionCollection(supports)
 	assert captions.AddCaption(caption) is not None, \
 		'AddCaption failed: ' + GetLastErrorDescription()
 	assert len(captions) > 0
@@ -142,6 +147,7 @@ def AddSourceVideo(path):
 def AddSourceVideoWithCapHL(path, caption, start, end):
 	src = CreateSource(path, SourceType.VIDEO)
 	# cast IMVSource to IMVCaptionHighlight
+	from . import IMVCaptionHighlight
 	hilite = gen_stub(IMVCaptionHighlight)(src)
 	hilite.SetCaptionHighlight(caption, start, end, None)
 	hilite.VerifyUserDescriptors()
@@ -217,10 +223,12 @@ def AddCopyright(message, color=None, x=None, y=None, width=None, height=None):
 
 @is_a_stub
 def AddLogo(path, placement=None, opacity=None, crop=None):
+	from . import IMVProductionOverlay
 	from .mvrt import Core
 
 	# set logo
 	overlay = gen_stub(IMVProductionOverlay)(Core)
+	path = normalize(path)
 	assert os.path.isfile(path)
 	overlay.OverlaySourceFile = path
 
@@ -240,6 +248,7 @@ def AddLogo(path, placement=None, opacity=None, crop=None):
 def ConfigRenderTL2File(path):
 	from .mvrt import Core
 	# check if file exists
+	path = normalize(path)
 	assert os.path.isfile(path) and os.path.splitext(path)[1] == '.bin'
 	Core.ConfigRenderTL2File(path)
 
@@ -263,7 +272,10 @@ def SetActiveMVStyle(style, check=False):
 		assert Core.Styles.Count > 0, "No styles found!"
 		# check if style name is valid
 		assert style in map(lambda s: s.InternalName, IMVStyleCollection(Core.Styles))
-	Core.SetActiveMVStyle(style)
+	if hasattr(Core, "ActiveMVStyle"):
+		Core.ActiveMVStyle = style
+	else:
+		Core.SetActiveMVStyle(style)
 
 @is_a_stub
 def PutCreditsString(credits):
@@ -288,6 +300,7 @@ def PutAspectRatio(ratio):
 @is_a_stub
 def PutDescriptorFolder(path):
 	from .mvrt import Core
+	path = normalize(path)
 	if not os.path.exists(path):
 		os.makedirs(path)
 	Core.DescriptorFolder = path
@@ -306,8 +319,8 @@ def PutMusicLevel(level):
 
 def CheckProgress(poll_func, timeout=3600, sleep=1, onStop=None):
 	"""
-	Runs a while loop to check a task's running progress until it completes or
-	times out.
+	Runs a while loop to check a task's running progress until it completes,
+	times out, or stalls from inactivity.
 	
 	:param poll_func: Function callback to use to fetch the current progress.
 		Must return a number.
@@ -318,13 +331,23 @@ def CheckProgress(poll_func, timeout=3600, sleep=1, onStop=None):
 		is complete, or has timed out, or has failed due to an exception.
 	"""
 
-	prog = -1
+	last_prog = prog = -1
+	last_changed = time.time()
 	count = timeout
 	try:
 		while prog < 1.0:
 			# fetch current progress from function
 			prog = poll_func.__call__()
 			print r"Progress: %.2f" % prog
+
+			if prog <= last_prog:
+				# check if progress was stuck in the last 5 minutes
+				assert time.time() - last_changed < 300, \
+					("Progress stuck at %.2f%% for over 5 minutes!" % prog)
+			else:
+				last_prog = prog
+				last_changed = time.time()
+
 			count -= 1
 			assert count >= 0, "Timed out after %d repetitions." % timeout
 			time.sleep(sleep)
@@ -359,7 +382,7 @@ def AnalyseTillDone(resolution=1000, timeout=600):
 
 	from .mvrt import Core
 
-	assert Core.StartAnalysisProc(0), \
+	assert is_true_or_non_zero(Core.StartAnalysisProc(0)), \
 		("StartAnalysisProc failed: ", GetLastErrorDescription())
 	CheckProgress(lambda: Core.GetAnalysisProgress(), timeout=timeout,
 			sleep=resolution/1000.0, onStop=lambda: Core.StopAnalysisProc())
@@ -374,7 +397,7 @@ def MakeTillDone(mode, duration):
 	"""
 
 	from .mvrt import Core
-	assert Core.MakeMuveeTimeline(mode, duration), \
+	assert is_true_or_non_zero(Core.MakeMuveeTimeline(mode, duration)), \
 		"MakeMuveeTimeline failed: " + GetLastErrorDescription()
 
 @is_a_stub
@@ -390,7 +413,7 @@ def ThreadedMakeTillDone(mode, duration):
 	from .mvrt import Core
 	mode |= MakeFlags.THREADED
 
-	assert Core.MakeMuveeTimeline(mode, duration), \
+	assert is_true_or_non_zero(Core.MakeMuveeTimeline(mode, duration)), \
 		"MakeMuveeTimeline failed: " + GetLastErrorDescription()
 	def poll():
 		prog = Core.GetMakeProgress()
@@ -431,7 +454,8 @@ def PreviewTillDone(timeline=TimelineType.MUVEE, width=320, height=240):
 	class Preview(Window):
 		def __enter__(self):
 			# setup and start the rendering
-			assert Core.SetupRenderTL2Wnd(timeline, self.hwnd, 0, 0, width, height, None), \
+			assert is_true_or_non_zero(
+					Core.SetupRenderTL2Wnd(timeline, self.hwnd, 0, 0, width, height, None)), \
 					'SetupRenderTL2Wnd failed: ' + GetLastErrorDescription()
 			Core.StartRenderTL2WndProc(timeline)
 			StartCheckProgress(self.poll, onStop=lambda: self.close())
@@ -470,8 +494,10 @@ def SaveTillDone(filename, resolution=1000, timeout=600):
 	runname = os.path.splitext(os.path.basename(caller))[0]
 	path = filename.replace("[CurrentStyle]", Core.GetActiveMVStyle()) \
 					.replace("[ConfigName]", runname)
+	path = normalize(path)
 
-	assert Core.StartRenderTL2FileProc(path, None, 0, 0, 0, 0, None) >= 0, \
+	assert is_true_or_non_zero(
+			Core.StartRenderTL2FileProc(path, None, 0, 0, 0, 0, None)), \
 			("StartRenderTL2FileProc failed: " + GetLastErrorDescription())
 	def poll():
 		prog = Core.GetRenderTL2FileProgress()
@@ -500,12 +526,14 @@ def SaveTillDoneWithPreview(filename, resolution=1000, timeout=600, width=320, h
 	runname = os.path.splitext(os.path.basename(caller))[0]
 	path = filename.replace("[CurrentStyle]", Core.GetActiveMVStyle()) \
 					.replace("[ConfigName]", runname)
+	path = normalize(path)
 
 	# create winforms window
 	class Preview(Window):
 		def __enter__(self):
 			# setup and start the rendering
-			assert Core.StartRenderTL2FileProc(path, self.hwnd, 0, 0, width, height, None) >= 0, \
+			assert is_true_or_non_zero(
+				Core.StartRenderTL2FileProc(path, self.hwnd, 0, 0, width, height, None)), \
 				("StartRenderTL2FileProc failed: " + GetLastErrorDescription())
 			StartCheckProgress(self.poll, timeout=timeout, \
 					sleep=resolution/1000.0, onStop=lambda: self.close())
@@ -540,8 +568,9 @@ def PreviewSourceTillDone(src, width=320, height=240):
 	class Preview(Window):
 		def __enter__(self):
 			# setup and start the rendering
-			assert src.SetupRender(self.hwnd, 0, 0, width, height, None), \
-				'SetupRender failed: ' + GetLastErrorDescription()
+			assert is_true_or_non_zero(
+					src.SetupRender(self.hwnd, 0, 0, width, height, None)), \
+					'SetupRender failed: ' + GetLastErrorDescription()
 			src.StartRenderProc()
 			StartCheckProgress(self.poll, timeout=3600, onStop=lambda: self.close())
 			return self
@@ -607,6 +636,9 @@ def add_image(xml):
 	Adds an image from a .rvl project file XML node
 	"""
 
+	from . import IMVSourceCaption
+	from .mvrt import Core
+
 	# create image source
 	path = xml.find('name').text
 	assert os.path.isfile(path)
@@ -624,7 +656,6 @@ def add_image(xml):
 	# captions
 	caption = xml.find('caption')
 	if caption is not None:
-		from .mvrt import Core
 		fmt = Core.CreateMVTextFormatObj()
 		fmt.LogFontStr = caption.attrib['font']
 		fmt.Color = long(caption.attrib['fontcolor'])
@@ -663,6 +694,9 @@ def add_video(xml):
 	Adds a video file from a .rvl project file XML node
 	"""
 
+	from . import IMVCaptionHighlight
+	from .mvrt import Core
+
 	# create video source
 	path = xml.find('name').text
 	assert os.path.isfile(path)
@@ -670,7 +704,6 @@ def add_video(xml):
 
 	# captions
 	for caption in xml.findall('captions/caption'):
-		from .mvrt import Core
 		fmt = Core.CreateMVTextFormatObj()
 		fmt.LogFontStr = caption.find('font').text
 		fmt.Color = long(caption.find('fontcolor').text)
@@ -767,6 +800,7 @@ def LoadRvlProject(path):
 	:param path: Path to .rvl project file
 	"""
 
+	path = normalize(path)
 	assert os.path.isfile(path) and os.path.splitext(path)[1] == ".rvl"
 	xml = etree.parse(path)
 

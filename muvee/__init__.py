@@ -11,10 +11,16 @@ if sys.platform == 'cli':
 		sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 		clr.AddReferenceToFile('Interop.MVRuntimeLib.dll')
 		clr.AddReferenceToFile('IronBindings.dll')
-else:
-	raise "This Python module must be run by IronPython!"
+		clr.AddReference('Microsoft.VisualBasic')
 
-__version__ = (1, 0)
+	# load the COM interfaces
+	from MVRuntimeLib import *
+
+	# import IronBindings interface extensions
+	clr.ImportExtensions(Extensions)
+
+
+__version__ = (1, 1)
 logging.basicConfig(level=logging.DEBUG)
 
 def get_type(obj):
@@ -22,9 +28,11 @@ def get_type(obj):
 	Gets the COM interface name of an object instance
 	"""
 
-	clr.AddReference('Microsoft.VisualBasic')
-	from Microsoft.VisualBasic import Information
-	return Information.TypeName(obj)
+	if sys.platform == 'cli':
+		from Microsoft.VisualBasic import Information
+		return Information.TypeName(obj)
+	else:
+		raise NotImplemented
 
 
 class ProxyMixin(object):
@@ -41,9 +49,14 @@ class ProxyMixin(object):
 
 	def __del__(self):
 		# release com reference to proxied object
-		from System.Runtime.InteropServices import Marshal
-		obj = object.__getattribute__(self, '_proxyobj')
-		Marshal.FinalReleaseComObject(obj)
+		if sys.platform == 'cli':
+			from System.Runtime.InteropServices import Marshal
+			obj = object.__getattribute__(self, '_proxyobj')
+			Marshal.FinalReleaseComObject(obj)
+		else:
+			obj = object.__getattribute__(self, '_proxyobj')
+			if hasattr(obj, 'Release'):
+				obj.Release()
 
 	def __getattribute__(self, name):
 		# check if call can be handled by proxy or proxied object
@@ -124,7 +137,23 @@ def gen_stub(cls):
 
 	:param cls: Class to wrap with
 	"""
-	
+
+	# if not .NET, check if the platform has its own casting implementation
+	if sys.platform != 'cli':
+		class Castor(object):
+			"""
+			Functor that calls the native bindings' "To[Class]" function
+			"""
+			def __init__(self):
+				self.cls = cls
+
+			def __call__(self, obj):
+				if hasattr(obj, "To" + self.cls.__name__):
+					return getattr(obj, "To" + self.cls.__name__)()
+				raise NotImplementedError
+
+		return Castor()
+
 	# check classname in case cls is already a wrapper
 	if type(cls) != types.TypeType and 'Wrapper' in str(cls):
 		return cls
@@ -141,12 +170,6 @@ def gen_stub(cls):
 
 
 #========= Start =========
-
-# load the COM interfaces
-from MVRuntimeLib import *
-
-# import IronBindings interface extensions
-clr.ImportExtensions(Extensions)
 
 # load IronBindings
 import mvrt

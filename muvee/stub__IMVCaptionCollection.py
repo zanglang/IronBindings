@@ -5,11 +5,11 @@ from . import stub_class, ProxyMixin
 class IMVCaptionCollection(ProxyMixin):
 	"""Pythonic wrapper for MVRuntimeLib.IMVCaptionCollection"""
 
-	def __init__(self, *args, **kwargs):
-		super(IMVCaptionCollection, self).__init__(*args, **kwargs)
+	def __init__(self, proxyobj, *args, **kwargs):
+		super(IMVCaptionCollection, self).__init__(proxyobj, *args, **kwargs)
 
 	def __len__(self):
-		return self.Count()
+		return self.Size()
 
 	def __getitem__(self, key):
 		obj = object.__getattribute__(self, '_proxyobj')
