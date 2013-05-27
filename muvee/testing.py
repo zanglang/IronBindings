@@ -3,15 +3,22 @@ Functions related to running muFAT unit tests
 """
 
 import os, re, shutil, sys, traceback, unittest
+from argparse import ArgumentParser
 from datetime import datetime
 from functools import wraps
 from inspect import currentframe, getmodule
+from lxml import etree
 from pkgutil import iter_modules
 from tempfile import mkstemp
 from types import FunctionType
 
 
 def normalize(path):
+	"""
+	Convert filesystem paths from Windows to NIX/Mac variant
+	:param path: Windows filesystem path
+	"""
+
 	mappings = {
 		r"c:\mufat_repo": os.path.expanduser("~/mufat_repo"),
 		r"c:\muveedebug": "/muveedebug",
@@ -32,18 +39,30 @@ def normalize(path):
 
 
 def detect_media(*media):
-	if sys.platform == 'cli' or sys.platform.startswith("win"):
-		LOCAL = os.path.expanduser(r"C:\mufat_repo")
-		REMOTE = r"T:\\testsets\\muFAT_SDKRuntime"
-	else:
-		LOCAL = os.path.expanduser("~/mufat_repo")
-		REMOTE = "/Volumes/TestMedia/TestSets/muFAT_SDKRuntime"
-	local_re = re.compile(re.escape(LOCAL), re.IGNORECASE)
-	remote_re = re.compile(re.escape(REMOTE), re.IGNORECASE)
+	"""
+	Given an arbitrary amount of string arguments, check if they are a file on a
+	local filesystem used for muFAT test media; if the file is missing, copy it
+	from a remote network drive.
+
+	:param media: Any number of string arguments to check for test media
+	"""
+
 	media = filter(lambda s: isinstance(s, basestring), media)
+	if not len(media):
+		return
+
+	# detect just filesystem paths
+	if sys.platform == 'cli' or sys.platform.startswith("win"):
+		REMOTE = r"T:\testsets\muFAT_SDKRuntime"
+	else:
+		REMOTE = "/Volumes/TestMedia/TestSets/muFAT_SDKRuntime"
+	local_re = re.compile(r"C:\\mufat_repo|" + os.path.expanduser("~/mufat_repo"), re.IGNORECASE)
+	remote_re = re.compile(re.escape(REMOTE), re.IGNORECASE)
+	media = filter(lambda s: local_re.findall(s) or remote_re.findall(s), media)
+
+	# convert paths to specific platforms
+	media = map(normalize, media)
 	for dest in media:
-		if not local_re.findall(dest) and not remote_re.findall(dest):
-			continue
 		src = local_re.sub(REMOTE, dest)
 		if not os.path.exists(dest) or os.stat(src).st_size != os.stat(dest).st_size:
 			if not os.path.exists(os.path.dirname(dest)):
@@ -95,6 +114,7 @@ class MufatLogger(object):
 
 def testcase(f):
 	"""Marks a function as a testcase so it can be discovered by unittest"""
+
 	@wraps(f)
 	def _wrap(*args, **kwargs):
 		return f(*args, **kwargs)
@@ -104,6 +124,7 @@ def testcase(f):
 
 def make_tests(module):
 	"""Helper function to generate a list of `unittest.FunctionTestCase` from a module"""
+
 	from . import Init, Release
 	for func in module.__dict__.itervalues():
 		if type(func) == FunctionType and getattr(func, "is_a_testcase", False):
@@ -220,6 +241,38 @@ class TestGenerator(object):
 generate_test = TestGenerator()
 
 
+def load_suite(name, from_file="runconfig.xml"):
+	"""
+	Parse run configuration file and load the appropriate tests to run given a
+	muFAT suite name.
+	@param name:	Name of muFAT suite to load runs for
+	"""
+
+	xml = etree.parse(from_file).getroot()
+	suites = xml.xpath("suite[@name='%s' and not(@enabled='false')]" % name)
+	if not suites:
+		raise Exception("Suite '%s' not found in runconfig.xml" % name)
+	suite = suites[0]
+	runs = suite.xpath("run[not(@enabled='false')]/@name")
+	runs = map(str, runs)
+	if suite.get("directory") is not None:
+		# runfiles in these folders will be ignored
+		ignored = set(["include", "ignore", "includes"])
+		path = normalize(os.path.join(r"y:\mufat\testruns\regressionpaths", suite.get("directory")))
+		for root, dirs, files in os.walk(path): #@UnusedVariable
+			for f in files:
+				if f in ignored or f.startswith("Z_") or \
+						os.path.splitext(f)[1] not in [".py", ".run"] or \
+						set(root.lower().split(os.path.sep)).intersection(ignored):
+					continue
+				runs.append(os.path.join(root, f))
+
+	if not runs:
+		raise Exception("No runs found in suite '%s'!" % name)
+
+	return runs
+
+
 def run(testfunc):
 	"""
 	Generates a `unittest.TestSuite` out of a given function `func` by creating
@@ -232,6 +285,12 @@ def run(testfunc):
 
 	:param testfunc: The test function to be called
 	"""
+
+	# check for commandline arguments
+	p = ArgumentParser()
+	p.add_argument('--child', action='store_true')
+	p.add_argument('--debug', action='store_true')
+	args = p.parse_args()
 
 	# get caller frame's locals
 	frame = currentframe()
@@ -274,8 +333,25 @@ def run(testfunc):
 				print >> f, getmodule(test._testFunc).__file__
 				print >> f, (test.id() in passed_) and "1" or "0"
 				print >> f, getattr(test, "timeTaken", 0), "\n"
-
 		os.close(log_fd)
+
+		# push results to memcache
+		if args.queue:
+			from results import MemcacheQueue
+			queue = MemcacheQueue(key="xyzzy") # TODO: replace key
+			queue.put({
+				'pass': len(passed),
+				'fail': len(failures) + len(errors),
+				'untested': len(skipped),
+				'summary': log,
+				'shutdown': True,
+				'crash': len(skipped) > 1,
+				'retained_samples': [],
+				'return_code': 0,
+				'timeout': False,
+				'svn_rev': -1
+			})
+
 		localdict["passed"] = len(passed)
 		localdict["failed"] = len(failures) + len(errors)
 		localdict["skipped"] = len(skipped)

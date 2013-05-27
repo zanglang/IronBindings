@@ -17,7 +17,7 @@ from functools import wraps
 from xml.etree import ElementTree as etree
 from . import gen_stub, ArType, InitFlags, LoadFlags, MakeFlags, SourceType, \
 	TimelineType, IMVExclude, IMVHighlight, IMVImageInfo, IMVOperatorInfo, \
-	IMVPrimaryCaption, IMVSource, IMVStyleCollection, IMVStyleEx, \
+	IMVPrimaryCaption, IMVSource, IMVSource2, IMVStyleCollection, IMVStyleEx, \
 	IMVSupportMultiCaptions, IMVTargetRect, IMVTitleCredits
 from .testing import detect_media, generate_test, normalize
 from .window import Window
@@ -91,6 +91,7 @@ def CreateSource(path, srctype):
 			'LoadFile failed: ' + GetLastErrorDescription()
 	else:
 		# not a file source type
+		src = gen_stub(IMVSource2)(src)
 		src.Load(path, LoadFlags.CONTEXT)
 	return src
 
