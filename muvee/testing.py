@@ -7,7 +7,6 @@ from argparse import ArgumentParser
 from datetime import datetime
 from functools import wraps
 from inspect import currentframe, getmodule
-from lxml import etree
 from pkgutil import iter_modules
 from tempfile import mkstemp
 from types import FunctionType
@@ -239,38 +238,6 @@ class TestGenerator(object):
 			self.results.append(self.runner.run(case))
 
 generate_test = TestGenerator()
-
-
-def load_suite(name, from_file="runconfig.xml"):
-	"""
-	Parse run configuration file and load the appropriate tests to run given a
-	muFAT suite name.
-	@param name:	Name of muFAT suite to load runs for
-	"""
-
-	xml = etree.parse(from_file).getroot()
-	suites = xml.xpath("suite[@name='%s' and not(@enabled='false')]" % name)
-	if not suites:
-		raise Exception("Suite '%s' not found in runconfig.xml" % name)
-	suite = suites[0]
-	runs = suite.xpath("run[not(@enabled='false')]/@name")
-	runs = map(str, runs)
-	if suite.get("directory") is not None:
-		# runfiles in these folders will be ignored
-		ignored = set(["include", "ignore", "includes"])
-		path = normalize(os.path.join(r"y:\mufat\testruns\regressionpaths", suite.get("directory")))
-		for root, dirs, files in os.walk(path): #@UnusedVariable
-			for f in files:
-				if f in ignored or f.startswith("Z_") or \
-						os.path.splitext(f)[1] not in [".py", ".run"] or \
-						set(root.lower().split(os.path.sep)).intersection(ignored):
-					continue
-				runs.append(os.path.join(root, f))
-
-	if not runs:
-		raise Exception("No runs found in suite '%s'!" % name)
-
-	return runs
 
 
 def run(testfunc):
