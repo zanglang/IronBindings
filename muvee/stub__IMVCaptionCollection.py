@@ -9,7 +9,7 @@ class IMVCaptionCollection(ProxyMixin):
 		super(IMVCaptionCollection, self).__init__(proxyobj, *args, **kwargs)
 
 	def __len__(self):
-		return self.Count
+		return self.Count()
 
 	def __getitem__(self, key):
 		obj = object.__getattribute__(self, '_proxyobj')

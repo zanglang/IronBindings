@@ -42,7 +42,7 @@ def is_a_stub(f):
 	return _wrap
 
 def is_true_or_non_zero(ret):
-	return ret is None or ret is True or \
+	return ret == None or ret == True or \
 		(type(ret) in [ int, float ] and ret >= 0)
 
 

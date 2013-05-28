@@ -52,7 +52,7 @@ def detect_media(*media):
 
 	# detect just filesystem paths
 	if sys.platform == 'cli' or sys.platform.startswith("win"):
-		REMOTE = r"T:\testsets\muFAT_SDKRuntime"
+		REMOTE = r"T:\\testsets\\muFAT_SDKRuntime"
 	else:
 		REMOTE = "/Volumes/TestMedia/TestSets/muFAT_SDKRuntime"
 	local_re = re.compile(r"C:\\mufat_repo|" + os.path.expanduser("~/mufat_repo"), re.IGNORECASE)
@@ -301,23 +301,6 @@ def run(testfunc):
 				print >> f, (test.id() in passed_) and "1" or "0"
 				print >> f, getattr(test, "timeTaken", 0), "\n"
 		os.close(log_fd)
-
-		# push results to memcache
-		if args.queue:
-			from results import MemcacheQueue
-			queue = MemcacheQueue(key="xyzzy") # TODO: replace key
-			queue.put({
-				'pass': len(passed),
-				'fail': len(failures) + len(errors),
-				'untested': len(skipped),
-				'summary': log,
-				'shutdown': True,
-				'crash': len(skipped) > 1,
-				'retained_samples': [],
-				'return_code': 0,
-				'timeout': False,
-				'svn_rev': -1
-			})
 
 		localdict["passed"] = len(passed)
 		localdict["failed"] = len(failures) + len(errors)

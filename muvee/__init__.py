@@ -177,6 +177,7 @@ sys.modules['muvee.mvrt'] = mvrt
 
 # import stubs
 from enums import *
+import stub__IMVCore
 import stub__IMVCaptionCollection
 import stub__IMVStyleCollection
 from stubs import *
