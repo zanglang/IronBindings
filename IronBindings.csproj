@@ -114,6 +114,7 @@
     <Compile Include="Extensions\IMVCaptionHighlightExtension.cs" />
     <Compile Include="Extensions\IMVExclusionExtension.cs" />
     <Compile Include="Extensions\IMVHighlightExtension.cs" />
+    <Compile Include="IndexedProperty.cs" />
     <Compile Include="IronBindings.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="StubGenerator.cs" />

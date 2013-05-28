@@ -105,12 +105,51 @@ public {returnType} {func}({args1}) {
         }
 
         /// <summary>
+        /// Generates the function stub for an indexed class property
+        /// </summary>
+        /// <param name="property"></param>
+        /// <returns></returns>
+        private string GenerateIndexedProperty(PropertyInfo property)
+        {
+            var canReadWrite = (property.CanRead || property.CanWrite) ? "public" : "private";
+            var setter = property.CanWrite ? @"(index, v) => { source.{set_name}(index, v); }" : "null";
+            var code = @"
+{canReadWrite} IndexedProperty<{indextype}, {datatype}> {name} {
+    get {
+        return new IndexedProperty<{indextype}, {datatype}>(
+            index => source.{get_name}(index),
+            " + setter + @");
+    }
+}
+";
+
+            // generate function body template
+            return this.Format(
+                code,
+                new
+                    {
+                        indextype = property.GetIndexParameters()[0].ParameterType.FullName,
+                        datatype = property.PropertyType.FullName,
+                        name = property.Name,
+                        get_name = property.CanRead ? property.GetGetMethod().Name : "",
+                        set_name = property.CanWrite ? property.GetSetMethod().Name : "",
+                        canReadWrite
+                    });
+        }
+
+        /// <summary>
         /// Generates the function stub for a class property
         /// </summary>
         /// <param name="property"></param>
         /// <returns></returns>
         private string GenerateProperty(PropertyInfo property)
         {
+            // indexed property
+            if (property.GetIndexParameters().Length > 0)
+            {
+                return this.GenerateIndexedProperty(property);
+            }
+
             var canReadWrite = (property.CanRead || property.CanWrite) ? "public" : "private";
             var canRead = (!property.CanRead && property.CanWrite) ? "private" : "";
             var canWrite = (!property.CanWrite && property.CanRead) ? "private" : "";
@@ -135,19 +174,24 @@ public {returnType} {func}({args1}) {
         {
             var code = new StringBuilder();
 
-            // methods that are not property accessors
-            foreach (var method in this.Target.GetMethods()
-                .Where(method =>
-                    !method.Name.StartsWith("get_") &&
-                    !method.Name.StartsWith("set_")))
-            {
-                code.Append(this.GenerateMethod(method));
-            }
-
             // accessors
             foreach (var property in this.Target.GetProperties())
             {
                 code.Append(GenerateProperty(property));
+            }
+
+            // already generated property get/set methods in last step
+            var generated =
+                this.Target.GetProperties()
+                    .Where(property => property.GetIndexParameters().Length == 0)
+                    .Select(property => property.GetGetMethod())
+                    .Union(this.Target.GetProperties().Select(property => property.GetSetMethod()))
+                    .Where(method => method != null);
+
+            // methods that are not property accessors
+            foreach (var method in this.Target.GetMethods().Except(generated))
+            {
+                code.Append(this.GenerateMethod(method));
             }
 
             // join code into template
@@ -181,7 +225,10 @@ public {returnType} {func}({args1}) {
                         new AssemblyFileReference(typeof(Guid).Assembly.Location), 
 
                         // reference to original proxied class
-                        new AssemblyFileReference(this.Target.Assembly.Location)
+                        new AssemblyFileReference(this.Target.Assembly.Location),
+
+                        // reference to IronBindings
+                        new AssemblyFileReference(typeof(StubGenerator).Assembly.Location)
                     });
 
             // compile and store output in module
