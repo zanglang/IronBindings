@@ -175,8 +175,15 @@ def gen_stub(cls):
 import mvrt
 sys.modules['muvee.mvrt'] = mvrt
 
+# MacOS
+if sys.platform == 'darwin':
+	from mvrt import *
+
+# Windows only
+else:
+	from enums import *
+
 # import stubs
-from enums import *
 import stub__IMVCore
 import stub__IMVCaptionCollection
 import stub__IMVStyleCollection

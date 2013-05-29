@@ -3,9 +3,9 @@ Functions related to running muFAT unit tests
 """
 
 import os, re, shutil, sys, traceback, unittest
-from argparse import ArgumentParser
 from datetime import datetime
 from functools import wraps
+from hashlib import sha1
 from inspect import currentframe, getmodule
 from pkgutil import iter_modules
 from tempfile import mkstemp
@@ -78,12 +78,7 @@ class MufatLogger(object):
 	"""
 
 	def __init__(self):
-		# check if logfiles exist
-		exists = lambda a, b: os.path.isfile(a) and a or b
-		paths = map(normalize, [r'c:\muveedebug\Log.txt', 'c:\muveedebug\LoggingError.txt'])
-		self.file = reduce(exists, paths)
-		if not os.path.exists(os.path.dirname(self.file)):
-			os.makedirs(os.path.dirname(self.file))
+		self.file = MufatLogger.File()
 		self.stdout = sys.stdout
 		if os.path.isfile(self.file):
 			sys.stdout = self
@@ -109,6 +104,16 @@ class MufatLogger(object):
 	def _noop(self):
 		pass
 	close = flush = _noop
+
+	@classmethod
+	def File(cls):
+		# check if logfiles exist
+		exists = lambda a, b: os.path.isfile(a) and a or b
+		paths = map(normalize, [r'c:\muveedebug\Log.txt', 'c:\muveedebug\LoggingError.txt'])
+		f = reduce(exists, paths)
+		if not os.path.exists(os.path.dirname(f)):
+			os.makedirs(os.path.dirname(f))
+		return f
 
 
 def testcase(f):
@@ -251,13 +256,12 @@ def run(testfunc):
 	cases to the actual stubs. Hence, it should only be used in __main__.
 
 	:param testfunc: The test function to be called
+	:rtype: Returns a tuple containing:
+			- The number of passed testcases
+			- The number of failed testcases
+			- The number of skipped testcases
+			- The logfile wherein the testrun's result summary is stored
 	"""
-
-	# check for commandline arguments
-	p = ArgumentParser()
-	p.add_argument('--child', action='store_true')
-	p.add_argument('--debug', action='store_true')
-	args = p.parse_args()
 
 	# get caller frame's locals
 	frame = currentframe()
