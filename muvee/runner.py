@@ -53,12 +53,12 @@ def load_suite(name, from_file="runconfig.xml"):
 	runs = map(str, runs)
 	if suite.get("directory") is not None:
 		# runfiles in these folders will be ignored
-		ignored = set(["include", "ignore", "includes"])
+		ignored = set(["include", "ignore", "includes", "__init__"])
 		path = normalize(os.path.join(r"y:\mufat\testruns\regressionpaths", suite.get("directory")))
 		for root, dirs, files in os.walk(path): #@UnusedVariable
 			for f in files:
-				if f in ignored or f.startswith("Z_") or \
-						os.path.splitext(f)[1] != ".py" or \
+				if os.path.splitext(f)[1] != ".py" or \
+						os.path.splitext(f)[0] in ignored or \
 						set(root.lower().split(os.path.sep)).intersection(ignored):
 					continue
 				runs.append(os.path.join(root, f))
@@ -76,7 +76,7 @@ def do_child(runname, debug=False):
 	"""
 
 	# load and execute tests
-	from muvee.mvrt import Core
+	from .mvrt import Core
 	from runpy import run_path
 
 	# pre-clean data folders
@@ -143,7 +143,7 @@ def main(suites_or_runs, debug=False):
 	# python command to launch the child process
 	results = {}
 	svn_rev = 0
-	cmd = [sys.executable, "-u", os.path.abspath(__file__)]
+	cmd = [sys.executable, "-u", "-m", "muvee.runner"]
 	if sys.platform == "darwin":
 		cmd = ["arch -i386"] + cmd
 
@@ -237,9 +237,9 @@ def main(suites_or_runs, debug=False):
 				results[suite] = {}
 			results[suite][run] = result
 
-	print "Preparing to save."
 	if not debug:
 		# store results in MySQL
+		print "Preparing to save."
 		data = reports.load(DB, DBKEY, HOST)
 		if len(data):
 			r = data[0]
