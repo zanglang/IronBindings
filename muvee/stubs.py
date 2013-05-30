@@ -92,7 +92,7 @@ def CreateSource(path, srctype):
 	else:
 		# not a file source type
 		src = gen_stub(IMVSource2)(src)
-		src.Load(path, LoadFlags.CONTEXT)
+		src.Load(path, int(LoadFlags.CONTEXT))
 	return src
 
 @is_a_stub
