@@ -18,7 +18,7 @@ from xml.etree import ElementTree as etree
 from . import gen_stub, ArType, InitFlags, LoadFlags, MakeFlags, SourceType, \
 	TimelineType, IMVExclude, IMVHighlight, IMVImageInfo, IMVOperatorInfo, \
 	IMVPrimaryCaption, IMVSource, IMVSource2, IMVStyleCollection, IMVStyleEx, \
-	IMVSupportMultiCaptions, IMVTargetRect, IMVTitleCredits
+	IMVSupportMultiCaptions, IMVTargetRect, IMVTitleCredits, IMVVideoInfo
 from .testing import detect_media, generate_test, normalize
 from .window import Window
 
@@ -832,3 +832,13 @@ def LoadRvlProject(path):
 
 	# process settings
 	add_settings(xml.find('settings'))
+
+@is_a_stub
+def VerifyVideo(src_file, expected_width, expected_height, expected_aspect_ratio):
+    src = CreateSource(src_file, SourceType.VIDEO)
+    vid_info = gen_stub(IMVVideoInfo)(src)
+    assert ((vid_info.width == expected_width) and (vid_info.height == expected_height)), \
+           "Media verification failed: %s" % src_file
+    assert vid_info.AspectRatio == int(expected_aspect_ratio)
+
+
