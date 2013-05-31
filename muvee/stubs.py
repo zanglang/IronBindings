@@ -91,8 +91,8 @@ def CreateSource(path, srctype):
 			'LoadFile failed: ' + GetLastErrorDescription()
 	else:
 		# not a file source type
-		src = gen_stub(IMVSource2)(src)
-		src.Load(path, int(LoadFlags.CONTEXT))
+		src2 = gen_stub(IMVSource2)(src)
+		src2.Load(path, int(LoadFlags.CONTEXT))
 	return src
 
 @is_a_stub
