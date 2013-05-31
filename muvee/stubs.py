@@ -369,7 +369,7 @@ def StartCheckProgress(poll_func, timeout=3600, sleep=1, onStop=None):
 		args=(poll_func, timeout, sleep, onStop)).start()
 
 @is_a_stub
-def AnalyseTillDone(resolution=1000, timeout=600):
+def AnalyseTillDone(resolution=1000, timeout=1800):
 	"""
 	Starts analyzing all added sources in a separate thread and polls its
 	progress until analysis is done. The function will timeout after
@@ -378,7 +378,7 @@ def AnalyseTillDone(resolution=1000, timeout=600):
 	:param resolution: Frequency to poll for progress updates in milliseconds.
 		Default: 1000 milliseconds.
 	:param timeout: How many polls until the function is considered timed out.
-		Default: 600 polls.
+		Default: 1800 polls.
 	"""
 
 	from .mvrt import Core
@@ -478,7 +478,7 @@ def PreviewTillDone(timeline=TimelineType.MUVEE, width=320, height=240):
 
 
 @is_a_stub
-def SaveTillDone(filename, resolution=1000, timeout=600):
+def SaveTillDone(filename, resolution=1000, timeout=1800):
 	"""
 	Saves the video to a filename. The function will timeout after
 	`resolution` x `timeout` milliseconds.
@@ -487,7 +487,7 @@ def SaveTillDone(filename, resolution=1000, timeout=600):
 	:param resolution: Frequency to poll for progress updates in milliseconds.
 		Default: 1000 milliseconds.
 	:param timeout: How many polls until the function is considered timed out.
-		Default: 600 polls.
+		Default: 1800 polls.
 	"""
 
 	from .mvrt import Core
@@ -508,7 +508,7 @@ def SaveTillDone(filename, resolution=1000, timeout=600):
 		onStop=lambda: Core.StopRenderTL2FileProc())
 
 @is_a_stub
-def SaveTillDoneWithPreview(filename, resolution=1000, timeout=600, width=320, height=240):
+def SaveTillDoneWithPreview(filename, resolution=1000, timeout=1800, width=320, height=240):
 	"""
 	Saves the video to a filename. The function will timeout after
 	`resolution` x `timeout` milliseconds.
@@ -517,7 +517,7 @@ def SaveTillDoneWithPreview(filename, resolution=1000, timeout=600, width=320, h
 	:param resolution: Frequency to poll for progress updates in milliseconds.
 		Default: 1000 milliseconds.
 	:param timeout: How many polls until the function is considered timed out.
-		Default: 600 polls.
+		Default: 1800 polls.
 	"""
 
 	from .mvrt import Core
@@ -835,10 +835,8 @@ def LoadRvlProject(path):
 
 @is_a_stub
 def VerifyVideo(src_file, expected_width, expected_height, expected_aspect_ratio):
-    src = CreateSource(src_file, SourceType.VIDEO)
-    vid_info = gen_stub(IMVVideoInfo)(src)
-    assert ((vid_info.width == expected_width) and (vid_info.height == expected_height)), \
-           "Media verification failed: %s" % src_file
-    assert vid_info.AspectRatio == int(expected_aspect_ratio)
-
-
+	src = CreateSource(src_file, SourceType.VIDEO)
+	vid_info = gen_stub(IMVVideoInfo)(src)
+	assert ((vid_info.width == expected_width) and (vid_info.height == expected_height)), \
+		   "Media verification failed: %s" % src_file
+	assert vid_info.AspectRatio == int(expected_aspect_ratio)

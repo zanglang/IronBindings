@@ -271,9 +271,11 @@ if __name__ == "__main__":
 	if args.key:
 		DBKEY = args.key
 
+	import logging
+	logging.getLogger("boto").setLevel(logging.CRITICAL)
+
 	# child process
 	if args.child:
 		do_child(args.suites_or_runs, debug=args.debug)
-		# sys.exit called
-
-	main(args.suites_or_runs, debug=args.debug)
+	else:
+		main(args.suites_or_runs, debug=args.debug)
