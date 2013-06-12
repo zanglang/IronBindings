@@ -12,7 +12,9 @@ class ClrForm(object):
 		"""
 
 		from System.Windows.Forms import Application, Form
-		self.form = Form(Text="muFAT Test", Width=width, Height=height, TopMost=True)
+		from System.Drawing import Size
+		self.form = Form(Text="muFAT Test", Size=Size(width, height),
+			MinimizeBox=False, MaximizeBox=False, TopMost=True)
 		self.hwnd = self.form.Handle
 		if setup is not None:
 			setup.__call__()
@@ -20,6 +22,8 @@ class ClrForm(object):
 			self.form.Closing += teardown
 		else:
 			self.form.Closing += self.__exit__
+		if hasattr(self, 'resized'):
+			self.form.ResizeEnd += self.resized
 
 	def __enter__(self):
 		"""
@@ -27,7 +31,7 @@ class ClrForm(object):
 		"""
 		return self
 
-	def __exit__(self, type, value, traceback):
+	def __exit__(self, *args):
 		"""
 		Override this function to specify what happens when the form is closed
 		or closing.
@@ -45,6 +49,7 @@ class ClrForm(object):
 
 if sys.platform == "cli": # .NET
 	import clr
+	clr.AddReference('System.Drawing')
 	clr.AddReference('System.Windows.Forms')
 	Window = ClrForm
 elif sys.platform == "darwin": # MacOS

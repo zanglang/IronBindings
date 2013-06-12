@@ -318,13 +318,15 @@ def PutMusicLevel(level):
 	assert 0 <= level <= 1
 	Core.MusicLevel = level
 
-def CheckProgress(poll_func, timeout=3600, sleep=1, onStop=None):
+def CheckProgress(poll_func, poll_flag=None, timeout=3600, sleep=1, onStop=None):
 	"""
 	Runs a while loop to check a task's running progress until it completes,
 	times out, or stalls from inactivity.
 	
 	:param poll_func: Function callback to use to fetch the current progress.
 		Must return a number.
+	:param poll_flag: `threading.Event` flag object to signal if a poll function
+		should not be executed anymore (e.g. caller function has stopped a process)
 	:param timeout: How many seconds before the polled task is considered to
 		have timed out and may be cancelled. Default: 60 minutes.
 	:param sleep: How many seconds to wait in between polls. Default: 1 second.
@@ -337,6 +339,10 @@ def CheckProgress(poll_func, timeout=3600, sleep=1, onStop=None):
 	count = timeout
 	try:
 		while prog < 1.0:
+			if poll_flag is not None and poll_flag.isSet():
+				print "Stopping...",
+				break
+
 			# fetch current progress from function
 			prog = poll_func.__call__()
 			print r"Progress: %.2f" % prog
@@ -360,13 +366,13 @@ def CheckProgress(poll_func, timeout=3600, sleep=1, onStop=None):
 		if onStop is not None:
 			onStop.__call__()
 
-def StartCheckProgress(poll_func, timeout=3600, sleep=1, onStop=None):
+def StartCheckProgress(poll_func, poll_flag=None, timeout=3600, sleep=1, onStop=None):
 	"""
 	Same as `CheckProgress`, but starts another thread to run it asynchronously.
 	"""
 
 	threading.Thread(target=CheckProgress, \
-		args=(poll_func, timeout, sleep, onStop)).start()
+		args=(poll_func, poll_flag, timeout, sleep, onStop)).start()
 
 @is_a_stub
 def AnalyseTillDone(resolution=1000, timeout=1800):
@@ -450,6 +456,7 @@ def PreviewTillDone(timeline=TimelineType.MUVEE, width=320, height=240):
 	from .mvrt import Core
 	assert width > 0
 	assert height > 0
+	flag = threading.Event()
 
 	# create winforms window
 	class Preview(Window):
@@ -459,7 +466,7 @@ def PreviewTillDone(timeline=TimelineType.MUVEE, width=320, height=240):
 					Core.SetupRenderTL2Wnd(timeline, self.hwnd, 0, 0, width, height, None)), \
 					'SetupRenderTL2Wnd failed: ' + GetLastErrorDescription()
 			Core.StartRenderTL2WndProc(timeline)
-			StartCheckProgress(self.poll, onStop=lambda: self.close())
+			StartCheckProgress(self.poll, flag, onStop=lambda: self.close())
 			return self
 
 		def poll(self):
@@ -470,8 +477,14 @@ def PreviewTillDone(timeline=TimelineType.MUVEE, width=320, height=240):
 
 		def __exit__(self, *args):
 			print 'Stopping.'
+			flag.set()
 			Core.StopRenderTL2WndProc(timeline)
 			Core.ShutdownRenderTL2Wnd(timeline)
+
+		def resized(self, *args):
+			assert is_true_or_non_zero(
+					Core.RefreshTL2Wnd(timeline, self.hwnd, 0, 0, width, height, None)), \
+					'RefreshTL2Wnd failed: ' + GetLastErrorDescription()
 
 	with Preview(width, height) as p:
 		p.show()
@@ -528,6 +541,7 @@ def SaveTillDoneWithPreview(filename, resolution=1000, timeout=1800, width=320, 
 	path = filename.replace("[CurrentStyle]", Core.GetActiveMVStyle()) \
 					.replace("[ConfigName]", runname)
 	path = normalize(path)
+	flag = threading.Event()
 
 	# create winforms window
 	class Preview(Window):
@@ -536,7 +550,7 @@ def SaveTillDoneWithPreview(filename, resolution=1000, timeout=1800, width=320, 
 			assert is_true_or_non_zero(
 				Core.StartRenderTL2FileProc(path, self.hwnd, 0, 0, width, height, None)), \
 				("StartRenderTL2FileProc failed: " + GetLastErrorDescription())
-			StartCheckProgress(self.poll, timeout=timeout, \
+			StartCheckProgress(self.poll, flag, timeout=timeout, \
 					sleep=resolution/1000.0, onStop=lambda: self.close())
 			return self
 
@@ -548,7 +562,13 @@ def SaveTillDoneWithPreview(filename, resolution=1000, timeout=1800, width=320, 
 
 		def __exit__(self, *args):
 			print 'Stopping.'
+			flag.set()
 			Core.StopRenderTL2FileProc()
+
+		def resized(self, *args):
+			assert is_true_or_non_zero(
+					Core.RefreshTL2File(self.hwnd, 0, 0, width, height, None)), \
+					'RefreshTL2File failed: ' + GetLastErrorDescription()
 
 	with Preview(width, height) as p:
 		p.show()
@@ -564,6 +584,7 @@ def PreviewSourceTillDone(src, width=320, height=240):
 
 	assert width > 0
 	assert height > 0
+	flag = threading.Event()
 
 	# create winforms window
 	class Preview(Window):
@@ -573,7 +594,7 @@ def PreviewSourceTillDone(src, width=320, height=240):
 					src.SetupRender(self.hwnd, 0, 0, width, height, None)), \
 					'SetupRender failed: ' + GetLastErrorDescription()
 			src.StartRenderProc()
-			StartCheckProgress(self.poll, timeout=3600, onStop=lambda: self.close())
+			StartCheckProgress(self.poll, flag, timeout=3600, onStop=lambda: self.close())
 			return self
 
 		def poll(self):
@@ -584,8 +605,14 @@ def PreviewSourceTillDone(src, width=320, height=240):
 
 		def __exit__(self, *args):
 			print 'Stopping.'
+			flag.set()
 			src.StopRenderProc()
 			src.ShutdownRender()
+
+		def resized(self, *args):
+			assert is_true_or_non_zero(
+					src.RefreshRender(self.hwnd, 0, 0, width, height, None)), \
+					'RefreshRender failed: ' + GetLastErrorDescription()
 
 	with Preview(width, height) as p:
 		p.show()
