@@ -18,7 +18,7 @@ from xml.etree import ElementTree as etree
 from . import gen_stub, ArType, InitFlags, LoadFlags, MakeFlags, SourceType, \
 	TimelineType, IMVExclude, IMVHighlight, IMVImageInfo, IMVOperatorInfo, \
 	IMVPrimaryCaption, IMVSource, IMVSource2, IMVStyleCollection, IMVStyleEx, \
-	IMVSupportMultiCaptions, IMVTargetRect, IMVTitleCredits, IMVVideoInfo3
+	IMVSupportMultiCaptions, IMVTargetRect, IMVTitleCredits
 from .testing import detect_media, generate_test, normalize
 from .window import Window
 
@@ -862,16 +862,22 @@ def LoadRvlProject(path):
 
 @is_a_stub
 def VerifyVideo(src_file, expected_width, \
-                expected_height, \
-                expected_aspect_ratio, \
-                expected_aspect_ratio_x, \
-                expected_aspect_ratio_y):
+				expected_height, \
+				expected_aspect_ratio, \
+				expected_aspect_ratio_x, \
+				expected_aspect_ratio_y):
+	try:
+		from . import IMVVideoInfo3
+	except:
+		# mac doesn't have IMVVideoInfo3
+		from . import IMVVideoInfo2 as IMVVideoInfo3
+
 	src = CreateSource(src_file, SourceType.VIDEO)
 	vid_info = gen_stub(IMVVideoInfo3)(src)
 	assert vid_info.width == expected_width and vid_info.height == expected_height, \
-               "Media width/height verification failed: %s" % src_file
+			"Media width/height verification failed: %s" % src_file
 	assert vid_info.AspectRatio == int(expected_aspect_ratio), \
-               "Media aspect ratio verification failed: %s" % src_file
+			"Media aspect ratio verification failed: %s" % src_file
 	assert vid_info.AspectRatioX == expected_aspect_ratio_x and \
-               vid_info.AspectRatioY == expected_aspect_ratio_y, \
-               "Media aspect ratio verification failed: %s" % src_file
+			vid_info.AspectRatioY == expected_aspect_ratio_y, \
+			"Media aspect ratio verification failed: %s" % src_file
