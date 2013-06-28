@@ -76,8 +76,10 @@ def load(db, key, machine=None):
 	return reports
 
 def connect():
-	return MySQLdb.connect(host="elrond", user="releasemaster",
-						passwd="releasemaster", db="mufat")
+	return MySQLdb.connect(
+			host="db-mufat.cwu8ku5vsrrv.ap-southeast-1.rds.amazonaws.com",
+			user="root", passwd="KaVSUKzwoQdpjXJofGGhpCgbYEw8aA+FXLkwsl4p",
+			db="mufat", port=8306, compress=True)
 
 def getdays(db):
 	if db.endswith(".db"):
