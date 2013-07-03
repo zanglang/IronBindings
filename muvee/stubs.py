@@ -664,7 +664,7 @@ def add_image(xml):
 	Adds an image from a .rvl project file XML node
 	"""
 
-	from . import IMVSourceCaption
+	from . import IMVCoreFactory, IMVSourceCaption
 	from .mvrt import Core
 
 	# create image source
@@ -684,7 +684,8 @@ def add_image(xml):
 	# captions
 	caption = xml.find('caption')
 	if caption is not None:
-		fmt = Core.CreateMVTextFormatObj()
+		factory = gen_stub(IMVCoreFactory)(Core)
+		fmt = factory.CreateMVTextFormatObj()
 		fmt.LogFontStr = caption.attrib['font']
 		fmt.Color = long(caption.attrib['fontcolor'])
 		fmt.TextRectXCoord = float(caption.attrib['offsetX'])
@@ -722,7 +723,7 @@ def add_video(xml):
 	Adds a video file from a .rvl project file XML node
 	"""
 
-	from . import IMVCaptionHighlight
+	from . import IMVCoreFactory, IMVCaptionHighlight
 	from .mvrt import Core
 
 	# create video source
@@ -732,7 +733,8 @@ def add_video(xml):
 
 	# captions
 	for caption in xml.findall('captions/caption'):
-		fmt = Core.CreateMVTextFormatObj()
+		factory = gen_stub(IMVCoreFactory)(Core)
+		fmt = factory.CreateMVTextFormatObj()
 		fmt.LogFontStr = caption.find('font').text
 		fmt.Color = long(caption.find('fontcolor').text)
 		fmt.TextRectXCoord = float(caption.find('offsetX').text)
@@ -769,8 +771,10 @@ def add_settings(xml):
 	Load project configuration from a .rvl project file XML node
 	"""
 
+	from . import IMVCoreFactory
 	from .mvrt import Core
 	Core.SetActiveMVStyle(xml.find('SelectedStyle').text)
+	factory = gen_stub(IMVCoreFactory)(Core)
 
 	# style parameters
 	if xml.find('SuperStyles[@default="0"]/parameter') is not None:
@@ -789,7 +793,7 @@ def add_settings(xml):
 	# titles
 	tc = gen_stub(IMVTitleCredits)(Core.Styles)
 	if xml.find('EnableTitle').text == '1':
-		fmt = Core.CreateMVTextFormatObj()
+		fmt = factory.CreateMVTextFormatObj()
 		fmt.LogFontStr = xml.find('TitleFont').text
 		fmt.Color = long(xml.find('TitleColor').text)
 		tc.TitleString = xml.find('TitleText').text
@@ -802,7 +806,7 @@ def add_settings(xml):
 
 	# credits
 	if xml.find('EnableCredits').text == '1':
-		fmt = Core.CreateMVTextFormatObj()
+		fmt = factory.CreateMVTextFormatObj()
 		fmt.LogFontStr = xml.find('CreditsFont').text
 		fmt.Color = long(xml.find('CreditsColor').text)
 		tc.CreditsString = xml.find('CreditsText').text
