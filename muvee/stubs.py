@@ -885,3 +885,13 @@ def VerifyVideo(src_file, expected_width, \
 	assert vid_info.AspectRatioX == expected_aspect_ratio_x and \
 			vid_info.AspectRatioY == expected_aspect_ratio_y, \
 			"Media aspect ratio verification failed: %s" % src_file
+
+@is_a_stub
+def ClearDescriptors():
+	from .mvrt import Core
+	path = os.path.join(Core.CommonDataFolder, "dscrp")
+	if os.path.isdir(path):
+		for root, dirs, files in os.walk(path):
+			for f in files:
+				print "Deleting", os.path.join(root, f)
+				os.remove(os.path.join(root, f))
