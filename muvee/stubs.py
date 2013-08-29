@@ -347,7 +347,7 @@ def CheckProgress(poll_func, poll_flag=None, timeout=3600, sleep=1, onStop=None)
 			prog = poll_func.__call__()
 			print r"Progress: %.2f" % prog
 
-			if prog <= last_prog:
+			if prog <= 0.0 or (prog - last_prog) < 0.01:
 				# check if progress was stuck in the last 5 minutes
 				assert time.time() - last_changed < 300, \
 					("Progress stuck at %.2f%% for over 5 minutes!" % prog)
