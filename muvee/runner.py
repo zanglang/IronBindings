@@ -1,4 +1,4 @@
-import os, re, shutil, socket, subprocess, sys, time
+import codecs, os, re, shutil, socket, subprocess, sys, time
 from hashlib import sha1
 from lxml import etree
 from queue import MemcacheQueue
@@ -171,13 +171,13 @@ def main(suites_or_runs, debug=False):
 			Watchdog(p, 3600).start()
 
 			# collect output text for processing later
-			with open(logfile, "w+") as f:
+			with codecs.open(logfile, "w+", "utf-8") as f:
 				while PRINT_OUTPUT:
-					line = unicode(p.stdout.readline())
+					line = unicode(p.stdout.readline(), errors="replace")
 					if not line:
 						break
 					f.write(line)
-					print line,
+					print line.encode("ascii", errors="replace"),
 
 			# block until process completes and record running time
 			p.communicate()
