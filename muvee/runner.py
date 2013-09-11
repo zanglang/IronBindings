@@ -1,16 +1,17 @@
-import codecs, os, re, shutil, socket, subprocess, sys, time
+import codecs, json, os, re, requests, shutil, socket, subprocess, sys, time
 from hashlib import sha1
 from lxml import etree
 from queue import MemcacheQueue
 from testing import normalize
 from watchdog import Watchdog
-import boto, reports
+import boto
 
 DB = "dailygrid_MacSDK"
 DBKEY = None
 HOST = socket.gethostname().split(".")[0]
 PRINT_OUTPUT = True
 MUVEEDEBUG = "/muveedebug"
+SERVER_URL = "http://thrall.muvee.com/mufat/"
 
 # Amazon login details
 AWS_ACCESS_KEY = "***REMOVED***"
@@ -141,7 +142,6 @@ def main(suites_or_runs, debug=False):
 		shutil.rmtree(cachedir)
 
 	# python command to launch the child process
-	results = {}
 	svn_rev = 0
 	cmd = [sys.executable, "-u", "-m", "muvee.runner"]
 	if sys.platform == "darwin":
@@ -233,28 +233,14 @@ def main(suites_or_runs, debug=False):
 			if result.get("svn_rev"):
 				svn_rev = result["svn_rev"]
 
-			if not results.has_key(suite):
-				results[suite] = {}
-			results[suite][run] = result
-
-	if not debug:
-		# store results in MySQL
-		print "Preparing to save."
-		data = reports.load(DB, DBKEY, HOST)
-		if len(data):
-			r = data[0]
-			print "Loaded previous report."
-		else:
-			r = reports.Report(db=DB, key=DBKEY, name=HOST, svn_rev=svn_rev, report={})
-			print "Creating new DB entry."
-
-		# update existing results if necessary
-		for suite, runs in results.iteritems():
-			if r.report.has_key(suite):
-				r.report[suite].update(runs)
-			else:
-				r.report[suite] = runs
-		r.save()
+			if not debug:
+				logger.info("Uploading intermediate results...")
+				r = requests.post(SERVER_URL + "%s/%s/%s/submit" % (DB, DBKEY, HOST), {
+					'suite': suite,
+					'runname': run,
+					'results': json.dumps(result)
+				}, headers={ "X-NO-LOGIN": "1" })
+				r.raise_for_status()
 
 
 if __name__ == "__main__":
