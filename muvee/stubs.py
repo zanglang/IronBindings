@@ -134,6 +134,13 @@ def AddSourceMusic(path):
 	AddSource(src, SourceType.MUSIC, LoadFlags.VERIFYSUPPORT)
 
 @is_a_stub
+def AddSourceMusicClip(path, start, stop):
+        src = CreateSource(path, SourceType.MUSIC)
+        src.Start = start
+        src.Stop = stop
+        AddSource(src, SourceType.Music, LoadFlags.VERIFYSUPPORT)
+
+@is_a_stub
 def AddSourceTextWithMinDuration(text, duration):
 	src = CreateSource(text, SourceType.TEXT)
 	src.MinImgSegDuration = duration
@@ -185,10 +192,10 @@ def AddSourceVideoWithExclusion(path, *args):
 	AddSource(src, SourceType.VIDEO, LoadFlags.VERIFYSUPPORT)
 
 @is_a_stub
-def AddSourceAnchorOperator(scmfile, anchor_value):
+def AddSourceAnchorOperator(scmfile, music_idx, anchor_value):
 	from .mvrt import Core
-	assert Core.MusicSources.Count > 0, "No music sources loaded!"
-	music = Core.MusicSources[0]
+	assert Core.MusicSources.Count > music_idx, "Music index out-of-range!"
+	music = Core.MusicSources[music_idx]
 
 	src = CreateSource(scmfile, SourceType.OPERATOR)
 	# setup anchor parameters
