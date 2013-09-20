@@ -135,10 +135,10 @@ def AddSourceMusic(path):
 
 @is_a_stub
 def AddSourceMusicClip(path, start, stop):
-        src = CreateSource(path, SourceType.MUSIC)
-        src.Start = start
-        src.Stop = stop
-        AddSource(src, SourceType.Music, LoadFlags.VERIFYSUPPORT)
+	src = CreateSource(path, SourceType.MUSIC)
+	src.Start = start
+	src.Stop = stop
+	AddSource(src, SourceType.MUSIC, LoadFlags.VERIFYSUPPORT)
 
 @is_a_stub
 def AddSourceTextWithMinDuration(text, duration):
