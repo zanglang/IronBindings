@@ -1,7 +1,7 @@
 import codecs, json, os, re, requests, shutil, socket, subprocess, sys, time
 from hashlib import sha1
 from lxml import etree
-from queue import MemcacheQueue
+from queue import RedisQueue
 from testing import normalize
 from watchdog import Watchdog
 import boto
@@ -91,7 +91,7 @@ def do_child(runname, debug=False):
 
 	# return results to parent for processing
 	if not debug:
-		q = MemcacheQueue("_".join(["Q", DBKEY, HOST]))
+		q = RedisQueue("_".join(["Q", DBKEY, HOST]))
 		q.put({
 			'pass': results["passed"],
 			'fail': results["failed"],
@@ -186,9 +186,9 @@ def main(suites_or_runs, debug=False):
 
 			# read results from child
 			try:
-				q = MemcacheQueue("_".join(["Q", DBKEY, HOST]))
+				q = RedisQueue("_".join(["Q", DBKEY, HOST]))
 				result = q.get_nowait()
-			except MemcacheQueue.Empty:
+			except RedisQueue.Empty:
 				# no results - child probably died?
 				result = {
 					'pass': 0,
@@ -234,7 +234,7 @@ def main(suites_or_runs, debug=False):
 				svn_rev = result["svn_rev"]
 
 			if not debug:
-				logger.info("Uploading intermediate results...")
+				print "Uploading intermediate results..."
 				r = requests.post(SERVER_URL + "%s/%s/%s/submit" % (DB, DBKEY, HOST), {
 					'suite': suite,
 					'runname': run,

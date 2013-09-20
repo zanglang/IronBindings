@@ -1,28 +1,31 @@
-import memcache, Queue
+import json, redis, Queue
 
-class MemcacheQueue(Queue.Queue):
+class RedisQueue(Queue.Queue):
 	"""
-	Memcached-based fifo queue, used for passing muFAT results between multiple
+	Redis-based fifo queue, used for passing muFAT results between multiple
 	processes, e.g. celery worker task and child muFAT runner
 	"""
 	def _init(self, key): #@UnusedVariable
-		self.cache = memcache.Client(['wsm-miniserver.sg.muvee.net:11211'], debug=1)
+		self.cache = redis.StrictRedis(host='thrall.muvee.com', port=6379, db=15)
 		self.key = key
 
 	def _qsize(self, len=len): #@ReservedAssignment
-		queue = self.cache.get(self.key) or []
-		return len(queue)
+		return self.cache.llen(self.key)
 
 	def _put(self, item):
-		queue = self.cache.get(self.key) or []
-		queue.append(item)
-		self.cache.set(self.key, queue, 3600)
+		self.cache.expire(self.key, 3600)
+		return self.cache.rpush(self.key, \
+			isinstance(item, basestring) and item or json.dumps(item))
 
 	def _get(self):
-		queue = self.cache.get(self.key) or []
+		self.cache.expire(self.key, 3600)
+		item = self.cache.lpop(self.key)
 		try:
-			return queue.pop(0)
+			if item:
+				item = json.loads(item)
+		except:
+			pass
 		finally:
-			self.cache.set(self.key, queue, 3600)
+			return item
 
 	Empty = Queue.Empty
