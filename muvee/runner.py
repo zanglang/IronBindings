@@ -172,12 +172,13 @@ def main(suites_or_runs, debug=False):
 
 			# collect output text for processing later
 			with codecs.open(logfile, "w+", "utf-8") as f:
-				while PRINT_OUTPUT:
+				while True:
 					line = unicode(p.stdout.readline(), errors="replace")
 					if not line:
 						break
 					f.write(line)
-					print line.encode("ascii", errors="replace"),
+					if PRINT_OUTPUT:
+						print line.encode("ascii", errors="replace"),
 
 			# block until process completes and record running time
 			p.communicate()
