@@ -152,6 +152,16 @@ def AddSourceVideo(path):
 	AddSource(src, SourceType.VIDEO, LoadFlags.VERIFYSUPPORT)
 
 @is_a_stub
+def AddSourceVideoNoProxy(path):
+	from .mvrt import Core
+	src = Core.CreateMVSource(SourceType.VIDEO)
+	path = normalize(path)
+	assert os.path.exists(path), "File %s does not exist" % path
+	assert src.LoadFile(path, int(LoadFlags.VERIFYSUPPORT)|int(LoadFlags.DISABLE_LOREZPROXY)), \
+		'LoadFile failed: ' + GetLastErrorDescription()
+	AddSource(src, SourceType.VIDEO, int(LoadFlags.VERIFYSUPPORT)|int(LoadFlags.DISABLE_LOREZPROXY))
+
+@is_a_stub
 def AddSourceVideoWithCapHL(path, caption, start, end):
 	src = CreateSource(path, SourceType.VIDEO)
 	# cast IMVSource to IMVCaptionHighlight
