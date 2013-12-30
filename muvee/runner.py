@@ -11,7 +11,7 @@ DBKEY = None
 HOST = socket.gethostname().split(".")[0]
 PRINT_OUTPUT = True
 MUVEEDEBUG = "/muveedebug"
-SERVER_URL = "http://thrall.muvee.com/mufat/"
+SERVER_URL = "http://mufat.muvee.com/"
 
 # Amazon login details
 AWS_ACCESS_KEY = "***REMOVED***"
