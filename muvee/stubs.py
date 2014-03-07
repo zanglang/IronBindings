@@ -96,6 +96,12 @@ def CreateSource(path, srctype):
 	return src
 
 @is_a_stub
+def EnumAndSetMVStyle(sty):
+	from .mvrt import Core
+	styname = Core.Styles.EnumMVStyleByMod(sty)
+	Core.SetActiveMVStyle(styname)
+
+@is_a_stub
 def AddSourceImage(path):
 	src = CreateSource(path, SourceType.IMAGE)
 	AddSource(src, SourceType.IMAGE, LoadFlags.VERIFYSUPPORT)
