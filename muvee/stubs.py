@@ -910,6 +910,13 @@ def VerifyVideo(src_file, expected_width, \
 			"Media aspect ratio verification failed: %s" % src_file
 
 @is_a_stub
+def CheckLastTimelineForRange(floor, ceiling):
+	from .mvrt import Core
+	dur = Core.GetTimelineDuration(0)
+	assert dur <= ceiling
+	assert dur >= floor
+
+@is_a_stub
 def ClearDescriptors():
 	from .mvrt import Core
 	path = os.path.join(Core.CommonDataFolder, "dscrp")
