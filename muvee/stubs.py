@@ -913,8 +913,10 @@ def VerifyVideo(src_file, expected_width, \
 def CheckLastTimelineForRange(floor, ceiling):
 	from .mvrt import Core
 	dur = Core.GetTimelineDuration(0)
-	assert dur <= ceiling
-	assert dur >= floor
+	assert dur <= ceiling, \
+		   "dur = " + str(dur) + ", ceiling = " + str(ceiling)
+	assert dur >= floor, \
+		   "dur = " + str(dur) + ", floor = " + str(floor)
 
 @is_a_stub
 def ClearDescriptors():
