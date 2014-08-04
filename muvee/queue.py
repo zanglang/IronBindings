@@ -6,7 +6,7 @@ class RedisQueue(Queue.Queue):
 	processes, e.g. celery worker task and child muFAT runner
 	"""
 	def _init(self, key): #@UnusedVariable
-		self.cache = redis.StrictRedis(host='mufat.muvee.com', port=6379, db=15)
+		self.cache = redis.StrictRedis(host='***REMOVED***', port=6379, db=15)
 		self.key = key
 
 	def _qsize(self, len=len): #@ReservedAssignment
